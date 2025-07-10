@@ -7,7 +7,7 @@
 <div class="d-flex gap-2 align-items-end">
     <div style="flex: 1;">
         <label>Perfil AWS:</label>
-        <select class="form-control" @bind="SelectedProfile">
+        <select class="form-control" @bind="SelectedProfile" disabled="@IsProcessing">
             @foreach (var profile in AvailableProfiles)
             {
                 <option value="@profile">@profile</option>
@@ -17,16 +17,18 @@
 
     <div style="flex: 2;">
         <label>Prefixo (caminho no Parameter Store):</label>
-        <input type="text" placeholder="Ex: /clapsapi/dev/agendador" class="form-control" @bind="InputPath" />
+        <input type="text" placeholder="Ex: /clapsapi/dev/agendador" class="form-control" @bind="InputPath" disabled="@IsProcessing" />
     </div>
 </div>
 
 <br />
 
 <label>Variáveis (chave=valor por linha):</label>
-<textarea @bind="InputText" rows="10" class="form-control"></textarea>
+<textarea @bind="InputText" rows="10" class="form-control" disabled="@IsProcessing"></textarea>
 <br />
-<button class="btn btn-primary" @onclick="Upload">Enviar</button>
+<button class="btn btn-primary" @onclick="Upload" disabled="@IsProcessing">
+    @(IsProcessing ? "Enviando..." : "Enviar")
+</button>
 
 <p>@Status</p>
 
@@ -37,6 +39,8 @@
 
     private List<string> AvailableProfiles = new();
     private string SelectedProfile = "";
+
+    private bool IsProcessing = false;
 
     protected override void OnInitialized()
     {
@@ -49,6 +53,9 @@
     {
         try
         {
+            Status = "";
+            IsProcessing = true;
+
             var credsFile = new Amazon.Runtime.CredentialManagement.SharedCredentialsFile();
             if (!credsFile.TryGetProfile(SelectedProfile, out var profile))
             {
@@ -65,6 +72,10 @@
         catch (Exception ex)
         {
             Status = $"Erro: {ex.Message}";
+        }
+        finally
+        {
+            IsProcessing = false;
         }
     }
 }
