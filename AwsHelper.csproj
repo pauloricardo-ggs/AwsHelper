@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="4.0.2" />
+    <PackageReference Include="AWSSDK.SecurityToken" Version="4.0.1.4" />
     <PackageReference Include="AWSSDK.SimpleSystemsManagement" Version="4.0.2.2" />
   </ItemGroup>
 

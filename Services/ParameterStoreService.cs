@@ -5,15 +5,11 @@ namespace AwsHelper.Services;
 
 public class ParameterStoreService
 {
-    private readonly IAmazonSimpleSystemsManagement _ssmClient;
-
-    public ParameterStoreService(IAmazonSimpleSystemsManagement ssmClient)
+    public async Task UploadVariablesAsync(string input, string prefix, string accessKey, string secretKey)
     {
-        _ssmClient = ssmClient;
-    }
+        var credentials = new Amazon.Runtime.BasicAWSCredentials(accessKey, secretKey);
+        using var ssmClient = new AmazonSimpleSystemsManagementClient(credentials, Amazon.RegionEndpoint.USEast1);
 
-    public async Task UploadVariablesAsync(string input, string prefix)
-    {
         var lines = input.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
 
         foreach (var line in lines)
@@ -34,7 +30,7 @@ public class ParameterStoreService
                 Overwrite = true
             };
 
-            await _ssmClient.PutParameterAsync(request);
+            await ssmClient.PutParameterAsync(request);
         }
     }
 }

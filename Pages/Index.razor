@@ -4,8 +4,26 @@
 
 <h3>Enviar Variáveis para o Parameter Store</h3>
 
-<input type="text" placeholder="Qual o caminho?" class="form-control" @bind="InputPath" />
+<div class="d-flex gap-2 align-items-end">
+    <div style="flex: 1;">
+        <label>Perfil AWS:</label>
+        <select class="form-control" @bind="SelectedProfile">
+            @foreach (var profile in AvailableProfiles)
+            {
+                <option value="@profile">@profile</option>
+            }
+        </select>
+    </div>
+
+    <div style="flex: 2;">
+        <label>Prefixo (caminho no Parameter Store):</label>
+        <input type="text" placeholder="Ex: /clapsapi/dev/agendador" class="form-control" @bind="InputPath" />
+    </div>
+</div>
+
 <br />
+
+<label>Variáveis (chave=valor por linha):</label>
 <textarea @bind="InputText" rows="10" class="form-control"></textarea>
 <br />
 <button class="btn btn-primary" @onclick="Upload">Enviar</button>
@@ -17,11 +35,31 @@
     private string InputText = "";
     private string Status = "";
 
+    private List<string> AvailableProfiles = new();
+    private string SelectedProfile = "";
+
+    protected override void OnInitialized()
+    {
+        var credsFile = new Amazon.Runtime.CredentialManagement.SharedCredentialsFile();
+        AvailableProfiles = credsFile.ListProfileNames().ToList();
+        SelectedProfile = AvailableProfiles.FirstOrDefault() ?? "";
+    }
+
     private async Task Upload()
     {
         try
         {
-            await ParamStore.UploadVariablesAsync(InputText, InputPath);
+            var credsFile = new Amazon.Runtime.CredentialManagement.SharedCredentialsFile();
+            if (!credsFile.TryGetProfile(SelectedProfile, out var profile))
+            {
+                Status = $"Perfil '{SelectedProfile}' não encontrado.";
+                return;
+            }
+
+            var accessKey = profile.Options.AccessKey;
+            var secretKey = profile.Options.SecretKey;
+
+            await ParamStore.UploadVariablesAsync(InputText, InputPath, accessKey, secretKey);
             Status = "Variáveis enviadas com sucesso!";
         }
         catch (Exception ex)
