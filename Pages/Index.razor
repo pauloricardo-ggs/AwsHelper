@@ -1,9 +1,32 @@
 ﻿@page "/"
+@using AwsHelper.Services
+@inject ParameterStoreService ParamStore
 
-<PageTitle>Index</PageTitle>
+<h3>Enviar Variáveis para o Parameter Store</h3>
 
-<h1>Hello, world!</h1>
+<input type="text" placeholder="Qual o caminho?" class="form-control" @bind="InputPath" />
+<br />
+<textarea @bind="InputText" rows="10" class="form-control"></textarea>
+<br />
+<button class="btn btn-primary" @onclick="Upload">Enviar</button>
 
-Welcome to your new app.
+<p>@Status</p>
 
-<SurveyPrompt Title="How is Blazor working for you?" />
+@code {
+    private string InputPath = "";
+    private string InputText = "";
+    private string Status = "";
+
+    private async Task Upload()
+    {
+        try
+        {
+            await ParamStore.UploadVariablesAsync(InputText, InputPath);
+            Status = "Variáveis enviadas com sucesso!";
+        }
+        catch (Exception ex)
+        {
+            Status = $"Erro: {ex.Message}";
+        }
+    }
+}

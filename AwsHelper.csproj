@@ -6,4 +6,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="4.0.2" />
+    <PackageReference Include="AWSSDK.SimpleSystemsManagement" Version="4.0.2.2" />
+  </ItemGroup>
+
 </Project>
