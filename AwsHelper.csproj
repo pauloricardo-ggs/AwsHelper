@@ -10,6 +10,12 @@
     <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="4.0.2" />
     <PackageReference Include="AWSSDK.SecurityToken" Version="4.0.1.4" />
     <PackageReference Include="AWSSDK.SimpleSystemsManagement" Version="4.0.2.2" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="7.0.20" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="7.0.20">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="7.0.18" />
   </ItemGroup>
 
 </Project>

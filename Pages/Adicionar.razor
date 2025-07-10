@@ -1,6 +1,10 @@
-﻿@page "/"
+﻿@page "/parameter-store/variables/add"
 @using AwsHelper.Services
+@using AwsHelper.Data
+@using AwsHelper.Models
+@using Microsoft.EntityFrameworkCore
 @inject ParameterStoreService ParamStore
+@inject AppDbContext DbContext
 
 <h3>Enviar Variáveis para o Parameter Store</h3>
 
@@ -16,8 +20,14 @@
     </div>
 
     <div style="flex: 2;">
-        <label>Prefixo (caminho no Parameter Store):</label>
-        <input type="text" placeholder="Ex: /clapsapi/dev/agendador" class="form-control" @bind="InputPath" disabled="@IsProcessing" />
+        <label>Caminho:</label>
+        <select class="form-control" @bind="SelectedPath" disabled="@IsProcessing">
+            <option value="">Selecione um caminho...</option>
+            @foreach (var parameterStorage in AvailableParameterStorages)
+            {
+                <option value="@parameterStorage.Path">@parameterStorage.Description</option>
+            }
+        </select>
     </div>
 </div>
 
@@ -33,20 +43,24 @@
 <p>@Status</p>
 
 @code {
-    private string InputPath = "";
+    private string SelectedPath = "";
     private string InputText = "";
     private string Status = "";
 
     private List<string> AvailableProfiles = new();
+    private List<ParameterStorage> AvailableParameterStorages = new();
     private string SelectedProfile = "";
 
     private bool IsProcessing = false;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         var credsFile = new Amazon.Runtime.CredentialManagement.SharedCredentialsFile();
         AvailableProfiles = credsFile.ListProfileNames().ToList();
         SelectedProfile = AvailableProfiles.FirstOrDefault() ?? "";
+
+        // Carregar os ParameterStorages do banco de dados
+        AvailableParameterStorages = await DbContext.ParameterStorages.ToListAsync();
     }
 
     private async Task Upload()
@@ -55,6 +69,12 @@
         {
             Status = "";
             IsProcessing = true;
+
+            if (string.IsNullOrEmpty(SelectedPath))
+            {
+                Status = "Por favor, selecione um caminho.";
+                return;
+            }
 
             var credsFile = new Amazon.Runtime.CredentialManagement.SharedCredentialsFile();
             if (!credsFile.TryGetProfile(SelectedProfile, out var profile))
@@ -66,7 +86,7 @@
             var accessKey = profile.Options.AccessKey;
             var secretKey = profile.Options.SecretKey;
 
-            await ParamStore.UploadVariablesAsync(InputText, InputPath, accessKey, secretKey);
+            await ParamStore.UploadVariablesAsync(InputText, SelectedPath, accessKey, secretKey);
             Status = "Variáveis enviadas com sucesso!";
         }
         catch (Exception ex)

@@ -50,6 +50,14 @@
     color: white;
 }
 
+.nav-section-header {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding-left: 1rem;
+}
+
 @media (min-width: 641px) {
     .navbar-toggler {
         display: none;

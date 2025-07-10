@@ -1,0 +1,235 @@
+@page "/parameter-store/paths"
+@using AwsHelper.Data
+@using AwsHelper.Models
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.JSInterop
+@inject AppDbContext DbContext
+@inject IJSRuntime JSRuntime
+
+<h3 class="d-flex align-items-center">
+    Caminhos
+    @if (!IsAdding)
+    {
+        <button class="btn btn-outline-primary btn-sm ms-3" @onclick="ShowAddForm" title="Adicionar novo caminho">
+            <span class="oi oi-plus" aria-hidden="true"></span>
+        </button>
+    }
+</h3>
+
+@if (!string.IsNullOrEmpty(ErrorMessage))
+{
+    <div class="alert alert-danger" role="alert">
+        @ErrorMessage
+    </div>
+}
+
+@if (IsAdding)
+{
+    <EditForm Model="NewStorage" OnValidSubmit="AddStorage">
+        <DataAnnotationsValidator />
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Descrição</label>
+                <InputText class="form-control" placeholder="Ex: Claps Dev Agendador" @bind-Value="NewStorage.Description" />
+                <ValidationMessage For="@(() => NewStorage.Description)" />
+            </div>
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Caminho</label>
+                <InputText class="form-control" placeholder="Ex: /clapsapi/dev/agendador/" @bind-Value="NewStorage.Path" />
+                <ValidationMessage For="@(() => NewStorage.Path)" />
+            </div>
+        </div>
+        <button type="submit" class="btn btn-success">Salvar</button>
+        <button type="button" class="btn btn-secondary ms-2" @onclick="CancelAdd">Cancelar</button>
+    </EditForm>
+    <br />
+}
+
+<div class="row mb-3">
+    <div class="col-md-6">
+        <label class="form-label">Pesquisar:</label>
+        <input type="text" class="form-control" placeholder="Digite para pesquisar por descrição ou caminho..." 
+               @bind="SearchTerm" @bind:event="oninput" />
+    </div>
+</div>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Descrição</th>
+            <th>Caminho</th>
+            <th>Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var storage in FilteredStorages)
+        {
+            <tr>
+                @if (EditingId == storage.Id)
+                {
+                    <td>
+                        <InputText class="form-control" placeholder="Ex: Claps Dev Agendador" @bind-Value="EditingStorage.Description" />
+                    </td>
+                    <td>
+                        <InputText class="form-control" placeholder="Ex: /clapsapi/dev/agendador/" @bind-Value="EditingStorage.Path" />
+                    </td>
+                    <td>
+                        <button class="btn btn-success btn-sm me-1" @onclick="SaveEdit">
+                            <span class="oi oi-check" aria-hidden="true"></span>
+                        </button>
+                        <button class="btn btn-secondary btn-sm" @onclick="CancelEdit">
+                            <span class="oi oi-x" aria-hidden="true"></span>
+                        </button>
+                    </td>
+                }
+                else
+                {
+                    <td>@storage.Description</td>
+                    <td>@storage.Path</td>
+                    <td>
+                        <button class="btn btn-outline-primary btn-sm me-1" @onclick="() => StartEdit(storage)">
+                            <span class="oi oi-pencil" aria-hidden="true"></span>
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm" @onclick="() => DeleteStorage(storage)">
+                            <span class="oi oi-trash" aria-hidden="true"></span>
+                        </button>
+                    </td>
+                }
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    private List<ParameterStorage> Storages = new();
+    private bool IsAdding = false;
+    private ParameterStorage NewStorage = new();
+    private Guid? EditingId = null;
+    private ParameterStorage EditingStorage = new();
+    private string? ErrorMessage = null;
+    private string SearchTerm = "";
+
+    private List<ParameterStorage> FilteredStorages
+    {
+        get
+        {
+            var filtered = Storages.AsQueryable();
+            
+            if (!string.IsNullOrWhiteSpace(SearchTerm))
+            {
+                var searchLower = SearchTerm.ToLower();
+                filtered = filtered.Where(s => 
+                    s.Description.ToLower().Contains(searchLower) || 
+                    s.Path.ToLower().Contains(searchLower));
+            }
+            
+            return filtered.OrderBy(s => s.Description).ToList();
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        LoadStorages();
+    }
+
+    private void LoadStorages()
+    {
+        Storages = DbContext.ParameterStorages.OrderBy(s => s.Description).ToList();
+    }
+
+    private void ShowAddForm()
+    {
+        NewStorage = new ParameterStorage();
+        IsAdding = true;
+        ErrorMessage = null;
+    }
+
+    private void CancelAdd()
+    {
+        IsAdding = false;
+        ErrorMessage = null;
+    }
+
+    private async Task AddStorage()
+    {
+        if (!(await ValidateUniqueDescription(NewStorage.Description, null))) return;
+
+        DbContext.ParameterStorages.Add(NewStorage);
+        await DbContext.SaveChangesAsync();
+        LoadStorages();
+        IsAdding = false;
+        ErrorMessage = null;
+    }
+
+    private void StartEdit(ParameterStorage storage)
+    {
+        EditingId = storage.Id;
+        EditingStorage = new ParameterStorage
+        {
+            Id = storage.Id,
+            Description = storage.Description,
+            Path = storage.Path
+        };
+        ErrorMessage = null;
+    }
+
+    private void CancelEdit()
+    {
+        EditingId = null;
+        EditingStorage = new();
+        ErrorMessage = null;
+    }
+
+    private async Task SaveEdit()
+    {
+        if (!(await ValidateUniqueDescription(EditingStorage.Description, EditingId))) return;
+
+        var storage = DbContext.ParameterStorages.Find(EditingId);
+        if (storage != null)
+        {
+            storage.Description = EditingStorage.Description;
+            storage.Path = EditingStorage.Path;
+            await DbContext.SaveChangesAsync();
+            LoadStorages();
+            EditingId = null;
+            EditingStorage = new();
+            ErrorMessage = null;
+        }
+    }
+
+    private async Task DeleteStorage(ParameterStorage storage)
+    {
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", 
+            $"Tem certeza que deseja excluir o caminho '{storage.Description}'?\n\nEsta ação não pode ser desfeita.");
+        
+        if (confirmed)
+        {
+            DbContext.ParameterStorages.Remove(storage);
+            await DbContext.SaveChangesAsync();
+            LoadStorages();
+        }
+    }
+
+    private async Task<bool> ValidateUniqueDescription(string description, Guid? excludeId)
+    {
+        if (string.IsNullOrWhiteSpace(description))
+        {
+            ErrorMessage = "A descrição é obrigatória.";
+            return false;
+        }
+
+        var exists = await DbContext.ParameterStorages.AnyAsync(s => 
+            s.Description.ToLower() == description.ToLower() && 
+            (excludeId == null || s.Id != excludeId)
+        );
+
+        if (exists)
+        {
+            ErrorMessage = $"Já existe um caminho com a descrição '{description}'.";
+            return false;
+        }
+
+        ErrorMessage = null;
+        return true;
+    }
+}
