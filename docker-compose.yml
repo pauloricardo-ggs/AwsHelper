@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  awshelper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "7829:80"
+    volumes:
+      - ~/.aws:/root/.aws:ro
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
