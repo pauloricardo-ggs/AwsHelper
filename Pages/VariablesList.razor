@@ -1,0 +1,488 @@
+﻿@page "/parameter-store/variables"
+@using AwsHelper.Services
+@using AwsHelper.Data
+@using AwsHelper.Models
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.JSInterop
+@inject ParameterStoreService ParamStore
+@inject AppDbContext DbContext
+@inject IJSRuntime JSRuntime
+
+<h3 class="d-flex align-items-center">
+    Variáveis
+    @if (!IsAdding && !string.IsNullOrEmpty(SelectedPath))
+    {
+        <button class="btn btn-outline-primary btn-sm ms-3" @onclick="ShowAddForm" title="Adicionar novas variáveis" disabled="@IsLoading">
+            <span class="oi oi-plus" aria-hidden="true"></span>
+        </button>
+    }
+</h3>
+
+@if (IsAdding)
+{
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Adicionar Variáveis</h5>
+        </div>
+        <div class="card-body">
+            <EditForm Model="NewVariables" OnValidSubmit="AddVariables">
+                <DataAnnotationsValidator />
+                <div class="mb-3">
+                    <label class="form-label">Variáveis (formato: CHAVE=VALOR, uma por linha)</label>
+                    <InputTextArea class="form-control" rows="8" 
+                                   placeholder="DATABASE_URL=postgres://localhost:5432/mydb&#10;API_KEY=your-api-key-here&#10;DEBUG=true" 
+                                   @bind-Value="NewVariables.Input" />
+                    <div class="form-text">Digite uma variável por linha no formato CHAVE=VALOR</div>
+                    <ValidationMessage For="@(() => NewVariables.Input)" />
+                </div>
+                <button type="submit" class="btn btn-success" disabled="@IsLoading">
+                    @(IsLoading ? "Salvando..." : "Salvar")
+                </button>
+                <button type="button" class="btn btn-secondary ms-2" @onclick="CancelAdd" disabled="@IsLoading">Cancelar</button>
+            </EditForm>
+        </div>
+    </div>
+}
+
+<div class="d-flex gap-2 align-items-end mb-3">
+    <div style="flex: 1;">
+        <label>Perfil AWS:</label>
+        <select class="form-control" @bind="SelectedProfile" disabled="@IsLoading">
+            @foreach (var profile in AvailableProfiles)
+            {
+                <option value="@profile">@profile</option>
+            }
+        </select>
+    </div>
+
+    <div style="flex: 2;">
+        <label>Caminho:</label>
+        <select class="form-control" @bind="SelectedPath" disabled="@IsLoading">
+            <option value="">Selecione um caminho...</option>
+            @foreach (var parameterStorage in AvailableParameterStorages)
+            {
+                <option value="@parameterStorage.Path">@parameterStorage.Description</option>
+            }
+        </select>
+    </div>
+
+    <div>
+        <button class="btn btn-primary" @onclick="LoadParameters" disabled="@(IsLoading || string.IsNullOrEmpty(SelectedPath))">
+            @(IsLoading ? "Carregando..." : "Listar Variáveis")
+        </button>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(ErrorMessage))
+{
+    <div class="alert alert-danger" role="alert">
+        @ErrorMessage
+    </div>
+}
+
+@if (Parameters.Any())
+{
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <label class="form-label">Pesquisar:</label>
+            <input type="text" class="form-control" placeholder="Digite para pesquisar por nome ou valor..." 
+                   @bind="SearchTerm" @bind:event="oninput" @onkeypress="OnSearchKeyPress" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Itens por página:</label>
+            <select class="form-control" @bind="PageSize">
+                <option value="5">5</option>
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <span class="text-muted">Total: @FilteredParameters.Count variáveis</span>
+        </div>
+        <div>
+            <button class="btn btn-outline-secondary btn-sm" @onclick="PreviousPage" disabled="@(CurrentPage <= 1 || IsLoading)">
+                Anterior
+            </button>
+            <span class="mx-2">Página @CurrentPage de @TotalPages</span>
+            <button class="btn btn-outline-secondary btn-sm" @onclick="NextPage" disabled="@(CurrentPage >= TotalPages || IsLoading)">
+                Próximo
+            </button>
+        </div>
+    </div>
+
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Nome</th>
+                <th>Valor</th>
+                <th>Última Modificação</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var parameter in PaginatedParameters)
+            {
+                <tr style="cursor: pointer;" @onclick="() => ShowParameterDetails(parameter)">
+                    <td><code>@GetParameterKey(parameter.Name)</code></td>
+                    <td>
+                        <div style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" 
+                             title="@parameter.Value">
+                            @parameter.Value
+                        </div>
+                    </td>
+                    <td>@parameter.LastModifiedDate.ToString("dd/MM/yyyy HH:mm")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <div class="d-flex justify-content-center">
+        <button class="btn btn-outline-secondary" @onclick="PreviousPage" disabled="@(CurrentPage <= 1 || IsLoading)">
+            Anterior
+        </button>
+        <span class="mx-3 align-self-center">Página @CurrentPage de @TotalPages</span>
+        <button class="btn btn-outline-secondary" @onclick="NextPage" disabled="@(CurrentPage >= TotalPages || IsLoading)">
+            Próximo
+        </button>
+    </div>
+}
+else if (!IsLoading && !string.IsNullOrEmpty(SelectedPath))
+{
+    <div class="alert alert-info" role="alert">
+        Nenhuma variável encontrada no caminho selecionado.
+    </div>
+}
+
+@if (ShowDetailModal && SelectedParameter != null)
+{
+    <div class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title d-flex align-items-center">
+                        <span class="oi oi-eye me-2" aria-hidden="true"></span>
+                        Detalhes da Variável
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseDetailModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <div class="card border-primary">
+                                <div class="card-header bg-primary text-white">
+                                    <h5 class="mb-0">
+                                        <span class="oi oi-key me-2"></span>
+                                        Chave
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="text-center p-3">
+                                        <code class="fs-5 text-secondary fw-bold">@GetParameterKey(SelectedParameter.Name)</code>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card border-success">
+                                <div class="card-header bg-success text-white">
+                                    <h5 class="mb-0">
+                                        <span class="oi oi-code me-2"></span>
+                                        Valor
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="text-center p-3">
+                                        <code class="fs-5 text-secondary fw-bold">@SelectedParameter.Value</code>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Metadados -->
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0 text-muted">
+                                        <span class="oi oi-cloud me-2"></span>
+                                        Metadados AWS
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label fw-bold text-muted small">Nome Completo</label>
+                                            <div class="bg-light p-2 rounded">
+                                                <small style="word-break: break-all; font-family: monospace;">@SelectedParameter.Name</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3 mb-3">
+                                            <label class="form-label fw-bold text-muted small">Última Modificação</label>
+                                            <div class="bg-light p-2 rounded">
+                                                <span class="text-dark">
+                                                    <span class="oi oi-clock me-1"></span>
+                                                    @SelectedParameter.LastModifiedDate.ToString("dd/MM/yyyy HH:mm:ss")
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-2 mb-3">
+                                            <label class="form-label fw-bold text-muted small">Tipo</label>
+                                            <div class="bg-light p-2 rounded">
+                                                <span class="badge bg-info">@SelectedParameter.Type</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-1 mb-3">
+                                            <label class="form-label fw-bold text-muted small">Versão</label>
+                                            <div class="bg-light p-2 rounded">
+                                                <span class="badge bg-secondary">@($"v{SelectedParameter.Version}")</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-12 mb-3">
+                                            <label class="form-label fw-bold text-muted small">ARN</label>
+                                            <div class="bg-light p-2 rounded">
+                                                <small style="word-break: break-all; font-family: monospace;">@SelectedParameter.ARN</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseDetailModal">
+                        <span class="oi oi-x me-1"></span>
+                        Fechar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    public class NewVariablesModel
+    {
+        public string Input { get; set; } = "";
+    }
+    private string SelectedPath = "";
+    private string SearchTerm = "";
+    private string ErrorMessage = "";
+
+    private List<string> AvailableProfiles = new();
+    private List<ParameterStorage> AvailableParameterStorages = new();
+    private string SelectedProfile = "";
+
+    private bool IsLoading = false;
+    private bool IsAdding = false;
+    private NewVariablesModel NewVariables = new();
+
+    private bool ShowDetailModal = false;
+    private ParameterMetadata? SelectedParameter = null;
+
+    private int CurrentPage = 1;
+    private int PageSize = 10;
+    private List<ParameterMetadata> Parameters = new();
+
+    private List<ParameterMetadata> FilteredParameters
+    {
+        get
+        {
+            var filtered = Parameters.AsQueryable();
+            
+            if (!string.IsNullOrWhiteSpace(SearchTerm))
+            {
+                var searchLower = SearchTerm.ToLower();
+                filtered = filtered.Where(p => 
+                    p.Name.ToLower().Contains(searchLower) || 
+                    p.Value.ToLower().Contains(searchLower));
+            }
+            
+            return filtered.OrderBy(p => p.Name).ToList();
+        }
+    }
+
+    private List<ParameterMetadata> PaginatedParameters
+    {
+        get
+        {
+            var filtered = FilteredParameters;
+            return filtered
+                .Skip((CurrentPage - 1) * PageSize)
+                .Take(PageSize)
+                .ToList();
+        }
+    }
+
+    private int TotalPages => (int)Math.Ceiling((double)FilteredParameters.Count / PageSize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var credsFile = new Amazon.Runtime.CredentialManagement.SharedCredentialsFile();
+        AvailableProfiles = credsFile.ListProfileNames().ToList();
+        SelectedProfile = AvailableProfiles.FirstOrDefault() ?? "";
+
+        AvailableParameterStorages = await DbContext.ParameterStorages.ToListAsync();
+    }
+
+    private async Task LoadParameters()
+    {
+        try
+        {
+            ErrorMessage = "";
+            IsLoading = true;
+            Parameters.Clear();
+            CurrentPage = 1;
+
+            if (string.IsNullOrEmpty(SelectedPath))
+            {
+                ErrorMessage = "Por favor, selecione um caminho.";
+                return;
+            }
+
+            var credsFile = new Amazon.Runtime.CredentialManagement.SharedCredentialsFile();
+            if (!credsFile.TryGetProfile(SelectedProfile, out var profile))
+            {
+                ErrorMessage = $"Perfil '{SelectedProfile}' não encontrado.";
+                return;
+            }
+
+            var accessKey = profile.Options.AccessKey;
+            var secretKey = profile.Options.SecretKey;
+
+            var allParameters = new List<ParameterMetadata>();
+            string? nextToken = null;
+            
+            do
+            {
+                var (parameters, token) = await ParamStore.GetParametersAsync(
+                    SelectedPath, accessKey, secretKey, 10, nextToken);
+                
+                allParameters.AddRange(parameters);
+                nextToken = token;
+                
+            } while (!string.IsNullOrEmpty(nextToken));
+
+            Parameters = allParameters;
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Erro ao carregar variáveis: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (CurrentPage < TotalPages)
+        {
+            CurrentPage++;
+        }
+    }
+
+    private void PreviousPage()
+    {
+        if (CurrentPage > 1)
+        {
+            CurrentPage--;
+        }
+    }
+
+    private void OnSearchKeyPress(KeyboardEventArgs e)
+    {
+        CurrentPage = 1; // Reset para primeira página ao pesquisar
+    }
+
+    private void ShowAddForm()
+    {
+        NewVariables = new NewVariablesModel();
+        IsAdding = true;
+        ErrorMessage = "";
+    }
+
+    private void CancelAdd()
+    {
+        IsAdding = false;
+        ErrorMessage = "";
+    }
+
+    private async Task AddVariables()
+    {
+        try
+        {
+            ErrorMessage = "";
+            IsLoading = true;
+
+            if (string.IsNullOrWhiteSpace(NewVariables.Input))
+            {
+                ErrorMessage = "Por favor, digite ao menos uma variável.";
+                return;
+            }
+
+            if (string.IsNullOrEmpty(SelectedPath))
+            {
+                ErrorMessage = "Por favor, selecione um caminho.";
+                return;
+            }
+
+            var credsFile = new Amazon.Runtime.CredentialManagement.SharedCredentialsFile();
+            if (!credsFile.TryGetProfile(SelectedProfile, out var profile))
+            {
+                ErrorMessage = $"Perfil '{SelectedProfile}' não encontrado.";
+                return;
+            }
+
+            var accessKey = profile.Options.AccessKey;
+            var secretKey = profile.Options.SecretKey;
+
+            await ParamStore.UploadVariablesAsync(NewVariables.Input, SelectedPath, accessKey, secretKey);
+
+            await LoadParameters();
+
+            IsAdding = false;
+            ErrorMessage = "";
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Erro ao adicionar variáveis: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private string GetParameterKey(string fullPath)
+    {
+        if (string.IsNullOrEmpty(SelectedPath))
+            return fullPath;
+        
+        var prefix = SelectedPath.TrimEnd('/') + "/";
+        if (fullPath.StartsWith(prefix))
+            return fullPath.Substring(prefix.Length);
+        
+        return fullPath;
+    }
+
+    private void ShowParameterDetails(ParameterMetadata parameter)
+    {
+        SelectedParameter = parameter;
+        ShowDetailModal = true;
+    }
+
+    private void CloseDetailModal()
+    {
+        ShowDetailModal = false;
+        SelectedParameter = null;
+    }
+}
