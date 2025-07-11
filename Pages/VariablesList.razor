@@ -45,6 +45,103 @@
     </div>
 }
 
+@if (ShowConfirmationModal)
+{
+    <div class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title d-flex align-items-center">
+                        <span class="oi oi-warning me-2 text-warning" aria-hidden="true"></span>
+                        Confirmar Adição de Variáveis
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseConfirmationModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info" role="alert">
+                        <strong>Confirme os dados antes de prosseguir:</strong>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-muted">Perfil AWS</label>
+                            <div class="bg-light p-2 rounded">
+                                <span class="badge bg-primary">@SelectedProfile</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-muted">Caminho</label>
+                            <div class="bg-light p-2 rounded">
+                                <code>@SelectedPath</code>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-muted">Variáveis a serem adicionadas (@ParsedVariables.Count):</label>
+                        <div class="bg-light p-3 rounded" style="max-height: 300px; overflow-y: auto;">
+                            @if (ParsedVariables.Any())
+                            {
+                                <table class="table table-sm table-striped mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 40%;">Chave</th>
+                                            <th style="width: 60%;">Valor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var variable in ParsedVariables)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <code class="text-primary">@variable.Key</code>
+                                                </td>
+                                                <td>
+                                                    <div style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" 
+                                                         title="@variable.Value">
+                                                        @variable.Value
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                            else
+                            {
+                                <span class="text-muted fst-italic">Nenhuma variável válida encontrada</span>
+                            }
+                        </div>
+                    </div>
+
+                    @if (InvalidLines.Any())
+                    {
+                        <div class="alert alert-warning" role="alert">
+                            <strong>Linhas inválidas encontradas (serão ignoradas):</strong>
+                            <ul class="mb-0 mt-2">
+                                @foreach (var line in InvalidLines)
+                                {
+                                    <li><code>@line</code></li>
+                                }
+                            </ul>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" @onclick="ConfirmAddVariables" disabled="@(IsLoading || !ParsedVariables.Any())">
+                        <span class="oi oi-check me-1"></span>
+                        @(IsLoading ? "Enviando..." : "Confirmar e Enviar")
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="CloseConfirmationModal" disabled="@IsLoading">
+                        <span class="oi oi-x me-1"></span>
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 <div class="d-flex gap-2 align-items-end mb-3">
     <div style="flex: 1;">
         <label>Perfil AWS:</label>
@@ -58,7 +155,7 @@
 
     <div style="flex: 2;">
         <label>Caminho:</label>
-        <select class="form-control" @bind="SelectedPath" disabled="@IsLoading">
+        <select class="form-control" @bind="SelectedPath" @bind:after="OnPathChanged" disabled="@IsLoading">
             <option value="">Selecione um caminho...</option>
             @foreach (var parameterStorage in AvailableParameterStorages)
             {
@@ -285,6 +382,11 @@ else if (!IsLoading && !string.IsNullOrEmpty(SelectedPath))
     private bool ShowDetailModal = false;
     private ParameterMetadata? SelectedParameter = null;
 
+    // Modal de confirmação
+    private bool ShowConfirmationModal = false;
+    private List<KeyValuePair<string, string>> ParsedVariables = new();
+    private List<string> InvalidLines = new();
+
     private int CurrentPage = 1;
     private int PageSize = 10;
     private List<ParameterMetadata> Parameters = new();
@@ -403,6 +505,19 @@ else if (!IsLoading && !string.IsNullOrEmpty(SelectedPath))
         CurrentPage = 1; // Reset para primeira página ao pesquisar
     }
 
+    private async Task OnPathChanged()
+    {
+        if (!string.IsNullOrEmpty(SelectedPath))
+        {
+            await LoadParameters();
+        }
+        else
+        {
+            Parameters.Clear();
+            CurrentPage = 1;
+        }
+    }
+
     private void ShowAddForm()
     {
         NewVariables = new NewVariablesModel();
@@ -421,7 +536,6 @@ else if (!IsLoading && !string.IsNullOrEmpty(SelectedPath))
         try
         {
             ErrorMessage = "";
-            IsLoading = true;
 
             if (string.IsNullOrWhiteSpace(NewVariables.Input))
             {
@@ -435,6 +549,57 @@ else if (!IsLoading && !string.IsNullOrEmpty(SelectedPath))
                 return;
             }
 
+            // Parse das variáveis para validação
+            ParseVariables();
+            
+            if (!ParsedVariables.Any())
+            {
+                ErrorMessage = "Nenhuma variável válida encontrada. Use o formato CHAVE=VALOR.";
+                return;
+            }
+
+            // Mostrar modal de confirmação
+            ShowConfirmationModal = true;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Erro ao processar variáveis: {ex.Message}";
+        }
+    }
+
+    private void ParseVariables()
+    {
+        ParsedVariables.Clear();
+        InvalidLines.Clear();
+
+        var lines = NewVariables.Input.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var line in lines)
+        {
+            var trimmedLine = line.Trim();
+            if (string.IsNullOrEmpty(trimmedLine))
+                continue;
+
+            var parts = trimmedLine.Split('=', 2);
+            if (parts.Length == 2 && !string.IsNullOrWhiteSpace(parts[0]))
+            {
+                var key = parts[0].Trim();
+                var value = parts[1].Trim();
+                ParsedVariables.Add(new KeyValuePair<string, string>(key, value));
+            }
+            else
+            {
+                InvalidLines.Add(trimmedLine);
+            }
+        }
+    }
+
+    private async Task ConfirmAddVariables()
+    {
+        try
+        {
+            IsLoading = true;
+
             var credsFile = new Amazon.Runtime.CredentialManagement.SharedCredentialsFile();
             if (!credsFile.TryGetProfile(SelectedProfile, out var profile))
             {
@@ -445,10 +610,16 @@ else if (!IsLoading && !string.IsNullOrEmpty(SelectedPath))
             var accessKey = profile.Options.AccessKey;
             var secretKey = profile.Options.SecretKey;
 
-            await ParamStore.UploadVariablesAsync(NewVariables.Input, SelectedPath, accessKey, secretKey);
+            // Converter de volta para o formato esperado pelo serviço
+            var input = string.Join("\n", ParsedVariables.Select(kv => $"{kv.Key}={kv.Value}"));
+            
+            await ParamStore.UploadVariablesAsync(input, SelectedPath, accessKey, secretKey);
 
+            // Recarregar as variáveis após adicionar
             await LoadParameters();
 
+            // Fechar modais e limpar formulário
+            ShowConfirmationModal = false;
             IsAdding = false;
             ErrorMessage = "";
         }
@@ -460,6 +631,11 @@ else if (!IsLoading && !string.IsNullOrEmpty(SelectedPath))
         {
             IsLoading = false;
         }
+    }
+
+    private void CloseConfirmationModal()
+    {
+        ShowConfirmationModal = false;
     }
 
     private string GetParameterKey(string fullPath)
