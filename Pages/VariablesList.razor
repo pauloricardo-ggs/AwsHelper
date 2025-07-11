@@ -3,6 +3,7 @@
 @using AwsHelper.Models
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.JSInterop
+@using System.Linq
 @inject ParameterStoreService ParamStore
 @inject JsonDataService DataService
 @inject IJSRuntime JSRuntime
@@ -143,7 +144,7 @@
 <div class="d-flex gap-2 align-items-end mb-3">
     <div style="flex: 1;">
         <label>Perfil AWS:</label>
-        <select class="form-control" @bind="SelectedProfile" disabled="@IsLoading">
+        <select class="form-control" @bind="SelectedProfile" @bind:after="OnProfileChanged" disabled="@IsLoading">
             @foreach (var profile in AvailableProfiles)
             {
                 <option value="@profile">@profile</option>
@@ -542,10 +543,12 @@ else if (!IsLoading && !string.IsNullOrEmpty(SelectedPath))
     protected override async Task OnInitializedAsync()
     {
         var credsFile = new Amazon.Runtime.CredentialManagement.SharedCredentialsFile();
-        AvailableProfiles = credsFile.ListProfileNames().ToList();
+        AvailableProfiles = credsFile.ListProfileNames().OrderBy(p => p).ToList();
         SelectedProfile = AvailableProfiles.FirstOrDefault() ?? "";
 
-        AvailableParameterStorages = await DataService.GetParameterStoragesAsync();
+        AvailableParameterStorages = (await DataService.GetParameterStoragesAsync())
+            .OrderBy(ps => ps.Description)
+            .ToList();
     }
 
     private async Task LoadParameters()
@@ -618,7 +621,7 @@ else if (!IsLoading && !string.IsNullOrEmpty(SelectedPath))
 
     private void OnSearchKeyPress(KeyboardEventArgs e)
     {
-        CurrentPage = 1; // Reset para primeira página ao pesquisar
+        CurrentPage = 1;
     }
 
     private async Task OnPathChanged()
@@ -632,6 +635,14 @@ else if (!IsLoading && !string.IsNullOrEmpty(SelectedPath))
             Parameters.Clear();
             CurrentPage = 1;
             StateHasChanged();
+        }
+    }
+
+    private async Task OnProfileChanged()
+    {
+        if (!string.IsNullOrEmpty(SelectedPath))
+        {
+            await LoadParameters();
         }
     }
 
