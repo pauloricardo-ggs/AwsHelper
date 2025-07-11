@@ -76,6 +76,35 @@ public class ParameterStoreService
 
         return (parameters, response.NextToken);
     }
+
+    public async Task UpdateParameterAsync(string parameterName, string newValue, string accessKey, string secretKey)
+    {
+        var credentials = new Amazon.Runtime.BasicAWSCredentials(accessKey, secretKey);
+        using var ssmClient = new AmazonSimpleSystemsManagementClient(credentials, Amazon.RegionEndpoint.USEast1);
+
+        var request = new PutParameterRequest
+        {
+            Name = parameterName,
+            Value = newValue,
+            Type = ParameterType.String,
+            Overwrite = true
+        };
+
+        await ssmClient.PutParameterAsync(request);
+    }
+
+    public async Task DeleteParameterAsync(string parameterName, string accessKey, string secretKey)
+    {
+        var credentials = new Amazon.Runtime.BasicAWSCredentials(accessKey, secretKey);
+        using var ssmClient = new AmazonSimpleSystemsManagementClient(credentials, Amazon.RegionEndpoint.USEast1);
+
+        var request = new DeleteParameterRequest
+        {
+            Name = parameterName
+        };
+
+        await ssmClient.DeleteParameterAsync(request);
+    }
 }
 
 public class ParameterMetadata

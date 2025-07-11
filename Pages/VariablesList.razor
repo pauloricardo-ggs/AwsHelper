@@ -299,12 +299,25 @@ else if (!IsLoading && !string.IsNullOrEmpty(SelectedPath))
                                     <h5 class="mb-0">
                                         <span class="oi oi-code me-2"></span>
                                         Valor
+                                        @if (IsEditingParameter)
+                                        {
+                                            <span class="badge bg-warning text-dark ms-2">Editando</span>
+                                        }
                                     </h5>
                                 </div>
                                 <div class="card-body">
-                                    <div class="text-center p-3">
-                                        <code class="fs-5 text-secondary fw-bold">@SelectedParameter.Value</code>
-                                    </div>
+                                    @if (!IsEditingParameter)
+                                    {
+                                        <div class="text-center p-3">
+                                            <code class="fs-5 text-secondary fw-bold">@SelectedParameter.Value</code>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="p-2">
+                                            <textarea class="form-control" rows="3" @bind="EditParameterValue" placeholder="Digite o novo valor..." disabled="@IsLoading"></textarea>
+                                        </div>
+                                    }
                                 </div>
                             </div>
                         </div>
@@ -321,6 +334,13 @@ else if (!IsLoading && !string.IsNullOrEmpty(SelectedPath))
                                     </h6>
                                 </div>
                                 <div class="card-body">
+                                    @if (IsEditingParameter)
+                                    {
+                                        <div class="alert alert-info alert-sm mb-3" role="alert">
+                                            <span class="oi oi-info me-2"></span>
+                                            <strong>Atenção:</strong> Os metadados abaixo só serão atualizados após carregar a lista de variáveis novamente.
+                                        </div>
+                                    }
                                     <div class="row">
                                         <div class="col-md-6 mb-3">
                                             <label class="form-label fw-bold text-muted small">Nome Completo</label>
@@ -362,9 +382,94 @@ else if (!IsLoading && !string.IsNullOrEmpty(SelectedPath))
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" @onclick="CloseDetailModal">
+                    @if (!IsEditingParameter)
+                    {
+                        <button type="button" class="btn btn-warning" @onclick="StartEditParameter" disabled="@IsLoading">
+                            <span class="oi oi-pencil me-1"></span>
+                            Editar
+                        </button>
+                        <button type="button" class="btn btn-danger" @onclick="ShowDeleteConfirmation" disabled="@IsLoading">
+                            <span class="oi oi-trash me-1"></span>
+                            Excluir
+                        </button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-success" @onclick="SaveParameterEdit" disabled="@IsLoading">
+                            <span class="oi oi-check me-1"></span>
+                            @(IsLoading ? "Salvando..." : "Salvar")
+                        </button>
+                        <button type="button" class="btn btn-secondary" @onclick="CancelParameterEdit" disabled="@IsLoading">
+                            <span class="oi oi-x me-1"></span>
+                            Cancelar
+                        </button>
+                    }
+                    <button type="button" class="btn btn-secondary" @onclick="CloseDetailModal" disabled="@IsLoading">
                         <span class="oi oi-x me-1"></span>
                         Fechar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (ShowDeleteConfirmModal && SelectedParameter != null)
+{
+    <div class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title d-flex align-items-center">
+                        <span class="oi oi-trash me-2 text-danger" aria-hidden="true"></span>
+                        Confirmar Exclusão de Variável
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CancelDelete"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning" role="alert">
+                        <strong>Atenção!</strong> Você está prestes a excluir uma variável.
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-muted">Perfil AWS</label>
+                        <div class="bg-light p-2 rounded">
+                            <span class="badge bg-primary">@SelectedProfile</span>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-muted">Caminho</label>
+                        <div class="bg-light p-2 rounded">
+                            <code>@SelectedPath</code>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-muted">Variável:</label>
+                        <div class="bg-light p-3 rounded">
+                            <div class="mb-2">
+                                <label class="form-label fw-bold text-muted small">Chave:</label>
+                                <div class="bg-white p-2 rounded border">
+                                    <code class="text-primary">@GetParameterKey(SelectedParameter.Name)</code>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="form-label fw-bold text-muted small">Valor:</label>
+                                <div class="bg-white p-2 rounded border" style="word-break: break-all;">
+                                    <code class="text-primary">@SelectedParameter.Value</code>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" @onclick="ConfirmDeleteParameter" disabled="@IsLoading">
+                        <span class="oi oi-trash me-1"></span>
+                        @(IsLoading ? "Excluindo..." : "Confirmar Exclusão")
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="CancelDelete" disabled="@IsLoading">
+                        <span class="oi oi-x me-1"></span>
+                        Cancelar
                     </button>
                 </div>
             </div>
@@ -391,6 +496,9 @@ else if (!IsLoading && !string.IsNullOrEmpty(SelectedPath))
 
     private bool ShowDetailModal = false;
     private ParameterMetadata? SelectedParameter = null;
+    private bool IsEditingParameter = false;
+    private string EditParameterValue = "";
+    private bool ShowDeleteConfirmModal = false;
 
     // Modal de confirmação
     private bool ShowConfirmationModal = false;
@@ -671,5 +779,120 @@ else if (!IsLoading && !string.IsNullOrEmpty(SelectedPath))
     {
         ShowDetailModal = false;
         SelectedParameter = null;
+        IsEditingParameter = false;
+        EditParameterValue = "";
+        ShowDeleteConfirmModal = false;
+    }
+
+    private void StartEditParameter()
+    {
+        if (SelectedParameter != null)
+        {
+            IsEditingParameter = true;
+            EditParameterValue = SelectedParameter.Value;
+        }
+    }
+
+    private void CancelParameterEdit()
+    {
+        IsEditingParameter = false;
+        EditParameterValue = "";
+    }
+
+    private async Task SaveParameterEdit()
+    {
+        if (SelectedParameter == null || string.IsNullOrWhiteSpace(EditParameterValue))
+            return;
+
+        try
+        {
+            IsLoading = true;
+            ErrorMessage = "";
+
+            var credsFile = new Amazon.Runtime.CredentialManagement.SharedCredentialsFile();
+            if (!credsFile.TryGetProfile(SelectedProfile, out var profile))
+            {
+                ErrorMessage = $"Perfil '{SelectedProfile}' não encontrado.";
+                return;
+            }
+
+            var accessKey = profile.Options.AccessKey;
+            var secretKey = profile.Options.SecretKey;
+
+            await ParamStore.UpdateParameterAsync(SelectedParameter.Name, EditParameterValue, accessKey, secretKey);
+
+            // Atualizar o valor localmente
+            SelectedParameter.Value = EditParameterValue;
+            
+            // Atualizar na lista também
+            var parameterInList = Parameters.FirstOrDefault(p => p.Name == SelectedParameter.Name);
+            if (parameterInList != null)
+            {
+                parameterInList.Value = EditParameterValue;
+            }
+
+            IsEditingParameter = false;
+            EditParameterValue = "";
+            
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Erro ao editar variável: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void ShowDeleteConfirmation()
+    {
+        ShowDeleteConfirmModal = true;
+    }
+
+    private async Task ConfirmDeleteParameter()
+    {
+        if (SelectedParameter == null)
+            return;
+
+        try
+        {
+            IsLoading = true;
+            ErrorMessage = "";
+
+            var credsFile = new Amazon.Runtime.CredentialManagement.SharedCredentialsFile();
+            if (!credsFile.TryGetProfile(SelectedProfile, out var profile))
+            {
+                ErrorMessage = $"Perfil '{SelectedProfile}' não encontrado.";
+                return;
+            }
+
+            var accessKey = profile.Options.AccessKey;
+            var secretKey = profile.Options.SecretKey;
+
+            await ParamStore.DeleteParameterAsync(SelectedParameter.Name, accessKey, secretKey);
+
+            // Remover da lista local
+            Parameters.RemoveAll(p => p.Name == SelectedParameter.Name);
+
+            // Fechar modal
+            CloseDetailModal();
+            
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Erro ao excluir variável: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void CancelDelete()
+    {
+        ShowDeleteConfirmModal = false;
     }
 }
