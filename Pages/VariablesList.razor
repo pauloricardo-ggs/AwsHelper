@@ -166,10 +166,20 @@
 
     <div>
         <button class="btn btn-primary" @onclick="LoadParameters" disabled="@(IsLoading || string.IsNullOrEmpty(SelectedPath))">
-            @(IsLoading ? "Carregando..." : "Listar Variáveis")
+            @(IsLoading ? "Carregando..." : "Atualizar")
         </button>
     </div>
 </div>
+
+@if (IsLoading)
+{
+    <div class="d-flex justify-content-center align-items-center my-4">
+        <div class="spinner-border text-primary me-3" role="status">
+            <span class="visually-hidden">Carregando...</span>
+        </div>
+        <span class="text-muted">Carregando variáveis...</span>
+    </div>
+}
 
 @if (!string.IsNullOrEmpty(ErrorMessage))
 {
@@ -515,6 +525,7 @@ else if (!IsLoading && !string.IsNullOrEmpty(SelectedPath))
         {
             Parameters.Clear();
             CurrentPage = 1;
+            StateHasChanged();
         }
     }
 
