@@ -12,4 +12,4 @@ services:
       - ~/.aws:/root/.aws:ro
       - ./data:/app/data
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_ENVIRONMENT=Release
