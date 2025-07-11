@@ -1,12 +1,10 @@
 ﻿@page "/parameter-store/variables"
 @using AwsHelper.Services
-@using AwsHelper.Data
 @using AwsHelper.Models
-@using Microsoft.EntityFrameworkCore
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.JSInterop
 @inject ParameterStoreService ParamStore
-@inject AppDbContext DbContext
+@inject JsonDataService DataService
 @inject IJSRuntime JSRuntime
 
 <h3 class="d-flex align-items-center">
@@ -547,7 +545,7 @@ else if (!IsLoading && !string.IsNullOrEmpty(SelectedPath))
         AvailableProfiles = credsFile.ListProfileNames().ToList();
         SelectedProfile = AvailableProfiles.FirstOrDefault() ?? "";
 
-        AvailableParameterStorages = await DbContext.ParameterStorages.ToListAsync();
+        AvailableParameterStorages = await DataService.GetParameterStoragesAsync();
     }
 
     private async Task LoadParameters()

@@ -1,7 +1,5 @@
 using AwsHelper.Services;
 using Amazon.SimpleSystemsManagement;
-using AwsHelper.Data;
-using Microsoft.EntityFrameworkCore;
 using System.Globalization;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,8 +16,8 @@ builder.Services.Configure<RequestLocalizationOptions>(options =>
 builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
 builder.Services.AddAWSService<IAmazonSimpleSystemsManagement>();
 
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+// Registrar o serviço JSON em vez do Entity Framework
+builder.Services.AddSingleton<JsonDataService>();
 
 builder.Services.AddScoped<ParameterStoreService>();
 
@@ -33,10 +31,6 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Error");
     app.UseHsts();
 }
-
-using var scope = app.Services.CreateScope();
-var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-db.Database.Migrate();
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();

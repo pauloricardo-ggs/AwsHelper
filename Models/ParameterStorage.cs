@@ -5,7 +5,7 @@ namespace AwsHelper.Models;
 
 public class ParameterStorage
 {
-    public Guid Id { get; set; }
+    public Guid Id { get; set; } = Guid.NewGuid();
 
     [Required(ErrorMessage = "A descrição é obrigatória.")]
     [StringLength(50, MinimumLength = 2, ErrorMessage = "A descrição deve ter entre 2 e 50 caracteres.")]

@@ -1,9 +1,8 @@
 @page "/parameter-store/paths"
-@using AwsHelper.Data
+@using AwsHelper.Services
 @using AwsHelper.Models
-@using Microsoft.EntityFrameworkCore
 @using Microsoft.JSInterop
-@inject AppDbContext DbContext
+@inject JsonDataService DataService
 @inject IJSRuntime JSRuntime
 
 <h3 class="d-flex align-items-center">
@@ -127,14 +126,14 @@
         }
     }
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        LoadStorages();
+        await LoadStorages();
     }
 
-    private void LoadStorages()
+    private async Task LoadStorages()
     {
-        Storages = DbContext.ParameterStorages.OrderBy(s => s.Description).ToList();
+        Storages = await DataService.GetParameterStoragesAsync();
     }
 
     private void ShowAddForm()
@@ -154,9 +153,8 @@
     {
         if (!(await ValidateUniqueDescription(NewStorage.Description, null))) return;
 
-        DbContext.ParameterStorages.Add(NewStorage);
-        await DbContext.SaveChangesAsync();
-        LoadStorages();
+        await DataService.AddParameterStorageAsync(NewStorage);
+        await LoadStorages();
         IsAdding = false;
         ErrorMessage = null;
     }
@@ -184,17 +182,11 @@
     {
         if (!(await ValidateUniqueDescription(EditingStorage.Description, EditingId))) return;
 
-        var storage = DbContext.ParameterStorages.Find(EditingId);
-        if (storage != null)
-        {
-            storage.Description = EditingStorage.Description;
-            storage.Path = EditingStorage.Path;
-            await DbContext.SaveChangesAsync();
-            LoadStorages();
-            EditingId = null;
-            EditingStorage = new();
-            ErrorMessage = null;
-        }
+        await DataService.UpdateParameterStorageAsync(EditingStorage);
+        await LoadStorages();
+        EditingId = null;
+        EditingStorage = new();
+        ErrorMessage = null;
     }
 
     private async Task DeleteStorage(ParameterStorage storage)
@@ -204,9 +196,8 @@
         
         if (confirmed)
         {
-            DbContext.ParameterStorages.Remove(storage);
-            await DbContext.SaveChangesAsync();
-            LoadStorages();
+            await DataService.DeleteParameterStorageAsync(storage.Id);
+            await LoadStorages();
         }
     }
 
@@ -218,7 +209,8 @@
             return false;
         }
 
-        var exists = await DbContext.ParameterStorages.AnyAsync(s => 
+        var storages = await DataService.GetParameterStoragesAsync();
+        var exists = storages.Any(s => 
             s.Description.ToLower() == description.ToLower() && 
             (excludeId == null || s.Id != excludeId)
         );

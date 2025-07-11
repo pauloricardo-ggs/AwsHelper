@@ -10,22 +10,6 @@ services:
       - "7829:80"
     volumes:
       - ~/.aws:/root/.aws:ro
+      - ./data:/app/data
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-    depends_on:
-      - db
-
-  db:
-    image: postgres:15
-    container_name: database
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: awshelperdb
-    # ports:
-    #   - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-
-volumes:
-  pgdata:
