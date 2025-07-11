@@ -24,7 +24,21 @@ builder.Services.AddScoped<AwsProfileService>();
 builder.Services.AddScoped<S3Service>();
 
 builder.Services.AddRazorPages();
-builder.Services.AddServerSideBlazor();
+builder.Services.AddServerSideBlazor(options =>
+{
+    // Aumentar timeout para uploads grandes
+    options.DetailedErrors = builder.Environment.IsDevelopment();
+    options.DisconnectedCircuitMaxRetained = 100;
+    options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(3);
+    options.JSInteropDefaultCallTimeout = TimeSpan.FromMinutes(10);
+}).AddHubOptions(options =>
+{
+    // Configurações para uploads grandes
+    options.ClientTimeoutInterval = TimeSpan.FromMinutes(15);
+    options.HandshakeTimeout = TimeSpan.FromMinutes(1);
+    options.KeepAliveInterval = TimeSpan.FromMinutes(1);
+    options.MaximumReceiveMessageSize = 128 * 1024 * 1024; // 128MB
+});
 
 var app = builder.Build();
 

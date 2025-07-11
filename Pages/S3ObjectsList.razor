@@ -5,6 +5,7 @@
 @inject AwsProfileService ProfileService
 @inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
+@inject ILogger<S3ObjectsList> _logger
 
 <PageTitle>@BucketName - Objetos S3 - AwsHelper</PageTitle>
 
@@ -63,6 +64,10 @@
                             Pasta Anterior
                         </button>
                     }
+                    <button class="btn btn-success" @onclick="OpenFileUpload" disabled="@(isLoading || string.IsNullOrEmpty(selectedProfile))">
+                        <span class="oi oi-cloud-upload me-2"></span>
+                        Enviar Arquivo
+                    </button>
                     <button class="btn btn-outline-secondary" @onclick="@(() => Navigation.NavigateTo("/s3/buckets"))">
                         <span class="oi oi-arrow-left me-2"></span>
                         Voltar aos Buckets
@@ -146,6 +151,195 @@
         <div class="alert alert-danger alert-dismissible fade show" role="alert">
             <strong>Erro:</strong> @errorMessage
             <button type="button" class="btn-close" @onclick="@(() => errorMessage = string.Empty)"></button>
+        </div>
+    }
+
+    @* Modal de Upload *@
+    @if (showUploadModal)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" @onclick="@(isUploading ? (Action)(() => {}) : CloseUploadModal)" @onclick:stopPropagation="true">
+            <div class="modal-dialog" @onclick:stopPropagation="true">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <span class="oi oi-cloud-upload me-2"></span>
+                            Enviar Arquivo
+                        </h5>
+                        <button type="button" class="btn-close" @onclick="CloseUploadModal" disabled="@isUploading"></button>
+                    </div>
+                    <div class="modal-body">
+                        @if (!string.IsNullOrEmpty(uploadErrorMessage))
+                        {
+                            <div class="alert alert-danger">
+                                <strong>Erro:</strong> @uploadErrorMessage
+                            </div>
+                        }
+                        
+                        @if (!string.IsNullOrEmpty(uploadSuccessMessage))
+                        {
+                            <div class="alert alert-success">
+                                <span class="oi oi-check me-2"></span>
+                                <strong>Sucesso:</strong> @uploadSuccessMessage
+                            </div>
+                        }
+                        
+                        @if (isUploading)
+                        {
+                            <div class="alert alert-info">
+                                <div class="d-flex align-items-center">
+                                    <span class="spinner-border spinner-border-sm me-3" role="status"></span>
+                                    <div>
+                                        <strong>Enviando arquivo...</strong><br/>
+                                        <small>@selectedFile?.Name (@FormatFileSize(selectedFile?.Size ?? 0))</small><br/>
+                                        <small class="text-muted">Por favor, não feche esta janela.</small>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Pasta de destino:</label>
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <span class="oi oi-folder"></span>
+                                </span>
+                                <input type="text" class="form-control" @bind="uploadPath" 
+                                       placeholder="@(string.IsNullOrEmpty(currentPath) ? "Raiz do bucket" : currentPath)" 
+                                       disabled="@isUploading" />
+                            </div>
+                            <small class="text-muted">Deixe vazio para enviar para: @(string.IsNullOrEmpty(currentPath) ? "/" : "/" + currentPath)</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Selecionar arquivo:</label>
+                            <input type="file" id="fileUploadInput" class="form-control" 
+                                   @onchange="OnFileSelected" disabled="@isUploading" />
+                            @if (selectedFile != null)
+                            {
+                                <div class="mt-2">
+                                    <small class="text-muted">
+                                        <strong>Arquivo:</strong> @selectedFile.Name<br/>
+                                        <strong>Tamanho:</strong> @FormatFileSize(selectedFile.Size)<br/>
+                                        <strong>Tipo:</strong> @selectedFile.Type
+                                    </small>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseUploadModal" disabled="@isUploading">
+                            Cancelar
+                        </button>
+                        <button type="button" class="btn btn-success" @onclick="UploadFile" disabled="@(isUploading || selectedFile == null)">
+                            @if (isUploading)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            }
+                            else
+                            {
+                                <span class="oi oi-cloud-upload me-2"></span>
+                            }
+                            Enviar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Modal de Confirmação de Substituição *@
+    @if (showConfirmationModal)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" @onclick:stopPropagation="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-warning text-dark">
+                        <h5 class="modal-title">
+                            <span class="oi oi-warning me-2"></span>
+                            Arquivo já existe
+                        </h5>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-warning mb-3">
+                            <span class="oi oi-warning me-2"></span>
+                            <strong>Atenção!</strong> Já existe um arquivo com o nome <strong>@existingFileName</strong> neste local.
+                        </div>
+                        <p>O que você deseja fazer?</p>
+                        <ul class="mb-0">
+                            <li><strong>Substituir:</strong> O arquivo existente será sobrescrito pelo novo arquivo.</li>
+                            <li><strong>Cancelar:</strong> O upload será cancelado e o arquivo existente será mantido.</li>
+                        </ul>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CancelUpload">
+                            <span class="oi oi-x me-2"></span>
+                            Cancelar
+                        </button>
+                        <button type="button" class="btn btn-warning" @onclick="ConfirmOverwrite">
+                            <span class="oi oi-loop-circular me-2"></span>
+                            Substituir
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Modal de Confirmação de Exclusão *@
+    @if (showDeleteConfirmationModal && objectToDelete != null)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" @onclick:stopPropagation="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title">
+                            <span class="oi oi-trash me-2"></span>
+                            Confirmar Exclusão
+                        </h5>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-danger mb-3">
+                            <span class="oi oi-warning me-2"></span>
+                            <strong>Atenção!</strong> Esta ação não pode ser desfeita.
+                        </div>
+                        <p>Você tem certeza que deseja excluir o arquivo:</p>
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title mb-1">
+                                    <span class="oi oi-document me-2"></span>
+                                    @objectToDelete.FileName
+                                </h6>
+                                <small class="text-muted">
+                                    <span class="oi oi-data-transfer-download me-1"></span>
+                                    @FormatFileSize(objectToDelete.Size) • 
+                                    <span class="oi oi-clock me-1"></span>
+                                    @objectToDelete.LastModified.ToString("dd/MM/yyyy HH:mm")
+                                </small>
+                            </div>
+                        </div>
+                        <p class="mt-3 mb-0">
+                            <strong>O arquivo será permanentemente removido do bucket S3.</strong>
+                        </p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CancelDelete" disabled="@isDeleting">
+                            <span class="oi oi-x me-2"></span>
+                            Cancelar
+                        </button>
+                        <button type="button" class="btn btn-danger" @onclick="ConfirmDelete" disabled="@isDeleting">
+                            @if (isDeleting)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            }
+                            else
+                            {
+                                <span class="oi oi-trash me-2"></span>
+                            }
+                            Excluir Arquivo
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     }
 
@@ -253,19 +447,34 @@
                                     }
                                     else
                                     {
-                                        <button type="button" class="btn btn-outline-primary btn-sm" 
-                                                @onclick="@(() => DownloadObject(item.File!))" 
-                                                disabled="@(downloadingObjects.Contains(item.File!.Key))">
-                                            @if (downloadingObjects.Contains(item.File!.Key))
-                                            {
-                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                                            }
-                                            else
-                                            {
-                                                <span class="oi oi-data-transfer-download me-1"></span>
-                                            }
-                                            Download
-                                        </button>
+                                        <div class="btn-group" role="group">
+                                            <button type="button" class="btn btn-outline-primary btn-sm" 
+                                                    @onclick="@(() => DownloadObject(item.File!))" 
+                                                    disabled="@(downloadingObjects.Contains(item.File!.Key))">
+                                                @if (downloadingObjects.Contains(item.File!.Key))
+                                                {
+                                                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="oi oi-data-transfer-download me-1"></span>
+                                                }
+                                                Download
+                                            </button>
+                                            <button type="button" class="btn btn-outline-danger btn-sm" 
+                                                    @onclick="@(() => ConfirmDeleteObject(item.File!))"
+                                                    disabled="@(downloadingObjects.Contains(item.File!.Key) || isDeleting)">
+                                                @if (deletingObjects.Contains(item.File!.Key))
+                                                {
+                                                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="oi oi-trash me-1"></span>
+                                                }
+                                                Excluir
+                                            </button>
+                                        </div>
                                     }
                                 </td>
                             </tr>
@@ -326,10 +535,36 @@
     private string errorMessage = string.Empty;
     private string searchTerm = string.Empty;
     private HashSet<string> downloadingObjects = new();
+    private HashSet<string> deletingObjects = new();
+    private bool isDeleting = false;
     
     // Variáveis para ordenação
     private SortField currentSortField = SortField.Name;
     private bool isAscending = true;
+
+    // Variáveis para upload
+    private bool showUploadModal = false;
+    private bool isUploading = false;
+    private string uploadErrorMessage = string.Empty;
+    private string uploadSuccessMessage = string.Empty;
+    private string uploadPath = string.Empty;
+    private FileInfo? selectedFile = null;
+
+    // Variáveis para confirmação de substituição
+    private bool showConfirmationModal = false;
+    private string existingFileName = string.Empty;
+
+    // Variáveis para confirmação de exclusão
+    private bool showDeleteConfirmationModal = false;
+    private S3Object? objectToDelete = null;
+
+    public class FileInfo
+    {
+        public string Name { get; set; } = string.Empty;
+        public long Size { get; set; }
+        public string Type { get; set; } = string.Empty;
+        public long LastModified { get; set; }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -713,6 +948,258 @@
             downloadingObjects.Remove(obj.Key);
             StateHasChanged();
         }
+    }
+
+    private void OpenFileUpload()
+    {
+        showUploadModal = true;
+        uploadErrorMessage = string.Empty;
+        uploadSuccessMessage = string.Empty;
+        selectedFile = null;
+        uploadPath = currentPath;
+    }
+
+    private void CloseUploadModal()
+    {
+        showUploadModal = false;
+        showConfirmationModal = false;
+        showDeleteConfirmationModal = false;
+        uploadErrorMessage = string.Empty;
+        uploadSuccessMessage = string.Empty;
+        selectedFile = null;
+        uploadPath = string.Empty;
+        existingFileName = string.Empty;
+        objectToDelete = null;
+    }
+
+    private async Task OnFileSelected()
+    {
+        try
+        {
+            var fileInfo = await JSRuntime.InvokeAsync<FileInfo?>("getFileInfo", "fileUploadInput");
+            selectedFile = fileInfo;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            uploadErrorMessage = $"Erro ao selecionar arquivo: {ex.Message}";
+        }
+    }
+
+    private async Task UploadFile()
+    {
+        if (selectedFile == null)
+        {
+            uploadErrorMessage = "Nenhum arquivo selecionado.";
+            return;
+        }
+
+        if (selectedFile.Size > 100 * 1024 * 1024) // 100MB
+        {
+            uploadErrorMessage = "Arquivo muito grande. O tamanho máximo permitido é 100MB.";
+            return;
+        }
+
+        // Construir chave do objeto
+        var objectKey = string.IsNullOrEmpty(uploadPath) 
+            ? selectedFile.Name 
+            : $"{uploadPath.TrimEnd('/')}/{selectedFile.Name}";
+
+        try
+        {
+            // Verificar se arquivo já existe
+            bool fileExists = await S3Service.ObjectExistsAsync(selectedProfile, BucketName, objectKey);
+            if (fileExists)
+            {
+                // Mostrar modal de confirmação
+                existingFileName = selectedFile.Name;
+                showConfirmationModal = true;
+                StateHasChanged();
+                return;
+            }
+
+            // Se não existe, proceder com upload
+            await PerformUpload();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro ao verificar se arquivo existe: {FileName}", selectedFile?.Name);
+            uploadErrorMessage = $"Erro ao verificar arquivo: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    private async Task PerformUpload()
+    {
+        if (selectedFile == null) return;
+
+        try
+        {
+            isUploading = true;
+            uploadErrorMessage = string.Empty;
+            uploadSuccessMessage = string.Empty;
+            StateHasChanged();
+
+            // Construir chave do objeto
+            var objectKey = string.IsNullOrEmpty(uploadPath) 
+                ? selectedFile.Name 
+                : $"{uploadPath.TrimEnd('/')}/{selectedFile.Name}";
+
+            // Determinar tipo de conteúdo
+            var contentType = !string.IsNullOrEmpty(selectedFile.Type) 
+                ? selectedFile.Type 
+                : "application/octet-stream";
+
+            // Ler arquivo como base64
+            var base64Data = await JSRuntime.InvokeAsync<string>("readFileAsBase64", "fileUploadInput");
+            if (string.IsNullOrEmpty(base64Data))
+            {
+                uploadErrorMessage = "Erro ao ler o arquivo selecionado.";
+                return;
+            }
+
+            // Converter base64 para bytes
+            var fileBytes = Convert.FromBase64String(base64Data);
+            
+            _logger.LogInformation("Iniciando upload de {FileName} ({Size} bytes) para {BucketName}/{Key}", 
+                selectedFile.Name, fileBytes.Length, BucketName, objectKey);
+
+            // Fazer upload usando CancellationToken com timeout generoso
+            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(20));
+            
+            var uploadTask = Task.Run(async () => 
+            {
+                await S3Service.UploadObjectAsync(selectedProfile, BucketName, objectKey, fileBytes, contentType);
+            }, cts.Token);
+
+            // Aguardar com timeout
+            await uploadTask;
+
+            _logger.LogInformation("Upload concluído com sucesso para {FileName}", selectedFile.Name);
+
+            // Mostrar sucesso temporariamente
+            uploadSuccessMessage = $"Arquivo '{selectedFile.Name}' enviado com sucesso!";
+            StateHasChanged();
+            
+            // Aguardar um pouco para mostrar a mensagem de sucesso
+            await Task.Delay(2000);
+            
+            // Fechar modal e recarregar objetos
+            CloseUploadModal();
+            await LoadObjects();
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Upload cancelado para {FileName}", selectedFile?.Name);
+            uploadErrorMessage = "O upload foi cancelado por timeout (20 minutos). Tente novamente com um arquivo menor.";
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("timeout"))
+        {
+            _logger.LogError(ex, "Timeout no upload de {FileName}", selectedFile?.Name);
+            uploadErrorMessage = "Timeout no upload. Tente novamente ou verifique sua conexão de internet.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro no upload de {FileName}", selectedFile?.Name);
+            uploadErrorMessage = $"Erro ao enviar arquivo: {ex.Message}";
+        }
+        finally
+        {
+            isUploading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ConfirmOverwrite()
+    {
+        showConfirmationModal = false;
+        StateHasChanged();
+        await PerformUpload();
+    }
+
+    private void CancelUpload()
+    {
+        showConfirmationModal = false;
+        existingFileName = string.Empty;
+        StateHasChanged();
+    }
+
+    private void ConfirmDeleteObject(S3Object obj)
+    {
+        objectToDelete = obj;
+        showDeleteConfirmationModal = true;
+        StateHasChanged();
+    }
+
+    private void CancelDelete()
+    {
+        showDeleteConfirmationModal = false;
+        objectToDelete = null;
+        StateHasChanged();
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (objectToDelete == null) return;
+
+        try
+        {
+            isDeleting = true;
+            deletingObjects.Add(objectToDelete.Key);
+            StateHasChanged();
+
+            _logger.LogInformation("Iniciando exclusão do arquivo {FileName} do bucket {BucketName}", 
+                objectToDelete.FileName, BucketName);
+
+            bool success = await S3Service.DeleteObjectAsync(selectedProfile, BucketName, objectToDelete.Key);
+
+            if (success)
+            {
+                _logger.LogInformation("Arquivo {FileName} excluído com sucesso", objectToDelete.FileName);
+                
+                // Fechar modal
+                showDeleteConfirmationModal = false;
+                objectToDelete = null;
+                
+                // Recarregar objetos
+                await LoadObjects();
+                
+                // Mostrar mensagem de sucesso temporariamente
+                errorMessage = string.Empty;
+                StateHasChanged();
+            }
+            else
+            {
+                errorMessage = $"Falha ao excluir o arquivo '{objectToDelete.FileName}'.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro ao excluir arquivo {FileName}", objectToDelete?.FileName);
+            errorMessage = $"Erro ao excluir arquivo: {ex.Message}";
+        }
+        finally
+        {
+            if (objectToDelete != null)
+            {
+                deletingObjects.Remove(objectToDelete.Key);
+            }
+            isDeleting = false;
+            StateHasChanged();
+        }
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
     }
 
 

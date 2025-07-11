@@ -26,7 +26,17 @@ namespace AwsHelper.Services
                 throw new ArgumentException($"Perfil '{profileName}' não encontrado ou inválido.");
             }
 
-            return new AmazonS3Client(credentials, RegionEndpoint.USEast1);
+            var config = new AmazonS3Config
+            {
+                RegionEndpoint = RegionEndpoint.USEast1,
+                Timeout = TimeSpan.FromMinutes(15), // Timeout de 15 minutos para uploads
+                MaxErrorRetry = 3,
+                RetryMode = Amazon.Runtime.RequestRetryMode.Standard,
+                UseHttp = false, // Forçar HTTPS
+                BufferSize = 8192 * 4 // Buffer maior para uploads
+            };
+
+            return new AmazonS3Client(credentials, config);
         }
 
         public async Task<List<S3Bucket>> ListBucketsAsync(string profileName)
@@ -152,6 +162,148 @@ namespace AwsHelper.Services
             catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
                 return false;
+            }
+        }
+
+        public async Task<string> UploadObjectAsync(string profileName, string bucketName, string key, Stream fileStream, string contentType = "application/octet-stream")
+        {
+            try
+            {
+                using var s3Client = CreateS3Client(profileName);
+                
+                // Para arquivos maiores que 100MB, usar multipart upload
+                if (fileStream.Length > 100 * 1024 * 1024)
+                {
+                    return await UploadLargeObjectAsync(s3Client, bucketName, key, fileStream, contentType);
+                }
+                
+                var request = new PutObjectRequest
+                {
+                    BucketName = bucketName,
+                    Key = key,
+                    InputStream = fileStream,
+                    ContentType = contentType,
+                    ServerSideEncryptionMethod = ServerSideEncryptionMethod.AES256
+                };
+
+                // Usar CancellationToken com timeout personalizado
+                using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(15));
+                var response = await s3Client.PutObjectAsync(request, cts.Token);
+                
+                _logger.LogInformation("Arquivo {Key} enviado com sucesso para o bucket {BucketName} usando o perfil {ProfileName}", key, bucketName, profileName);
+                return response.ETag;
+            }
+            catch (TaskCanceledException ex)
+            {
+                _logger.LogError(ex, "Timeout ao fazer upload do arquivo {Key} para o bucket {BucketName} usando o perfil {ProfileName}. O upload foi cancelado por timeout.", key, bucketName, profileName);
+                throw new InvalidOperationException($"O upload do arquivo '{key}' foi cancelado por timeout. Tente novamente ou verifique sua conexão.", ex);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao fazer upload do arquivo {Key} para o bucket {BucketName} usando o perfil {ProfileName}", key, bucketName, profileName);
+                throw;
+            }
+        }
+
+        private async Task<string> UploadLargeObjectAsync(IAmazonS3 s3Client, string bucketName, string key, Stream fileStream, string contentType)
+        {
+            _logger.LogInformation("Iniciando upload multipart para arquivo grande: {Key}", key);
+            
+            var initiateRequest = new InitiateMultipartUploadRequest
+            {
+                BucketName = bucketName,
+                Key = key,
+                ContentType = contentType,
+                ServerSideEncryptionMethod = ServerSideEncryptionMethod.AES256
+            };
+
+            var initResponse = await s3Client.InitiateMultipartUploadAsync(initiateRequest);
+            var uploadId = initResponse.UploadId;
+
+            try
+            {
+                const int partSize = 5 * 1024 * 1024; // 5MB por parte
+                var partETags = new List<PartETag>();
+                var partNumber = 1;
+                var buffer = new byte[partSize];
+
+                while (true)
+                {
+                    var bytesRead = await fileStream.ReadAsync(buffer, 0, partSize);
+                    if (bytesRead == 0) break;
+
+                    using var partStream = new MemoryStream(buffer, 0, bytesRead);
+                    var uploadRequest = new UploadPartRequest
+                    {
+                        BucketName = bucketName,
+                        Key = key,
+                        UploadId = uploadId,
+                        PartNumber = partNumber,
+                        InputStream = partStream
+                    };
+
+                    using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+                    var uploadResponse = await s3Client.UploadPartAsync(uploadRequest, cts.Token);
+                    partETags.Add(new PartETag(partNumber, uploadResponse.ETag));
+                    
+                    _logger.LogDebug("Parte {PartNumber} enviada para {Key}", partNumber, key);
+                    partNumber++;
+                }
+
+                var completeRequest = new CompleteMultipartUploadRequest
+                {
+                    BucketName = bucketName,
+                    Key = key,
+                    UploadId = uploadId,
+                    PartETags = partETags
+                };
+
+                var completeResponse = await s3Client.CompleteMultipartUploadAsync(completeRequest);
+                _logger.LogInformation("Upload multipart concluído com sucesso para {Key}", key);
+                
+                return completeResponse.ETag;
+            }
+            catch (Exception)
+            {
+                // Abortar upload multipart em caso de erro
+                await s3Client.AbortMultipartUploadAsync(bucketName, key, uploadId);
+                throw;
+            }
+        }
+
+        public async Task<string> UploadObjectAsync(string profileName, string bucketName, string key, byte[] fileBytes, string contentType = "application/octet-stream")
+        {
+            _logger.LogInformation("Iniciando upload de {Size} bytes para {BucketName}/{Key} usando perfil {ProfileName}", 
+                fileBytes.Length, bucketName, key, profileName);
+            
+            using var stream = new MemoryStream(fileBytes);
+            var result = await UploadObjectAsync(profileName, bucketName, key, stream, contentType);
+            
+            _logger.LogInformation("Upload concluído para {BucketName}/{Key}", bucketName, key);
+            return result;
+        }
+
+        public async Task<bool> DeleteObjectAsync(string profileName, string bucketName, string key)
+        {
+            try
+            {
+                using var s3Client = CreateS3Client(profileName);
+                
+                var request = new DeleteObjectRequest
+                {
+                    BucketName = bucketName,
+                    Key = key
+                };
+
+                await s3Client.DeleteObjectAsync(request);
+                
+                _logger.LogInformation("Arquivo {Key} deletado com sucesso do bucket {BucketName} usando o perfil {ProfileName}", key, bucketName, profileName);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao deletar o arquivo {Key} do bucket {BucketName} usando o perfil {ProfileName}", key, bucketName, profileName);
+                throw;
             }
         }
     }
