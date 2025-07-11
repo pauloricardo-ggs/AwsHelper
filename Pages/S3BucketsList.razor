@@ -1,0 +1,300 @@
+@page "/s3/buckets"
+@using AwsHelper.Models
+@using AwsHelper.Services
+@inject S3Service S3Service
+@inject AwsProfileService ProfileService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Buckets S3 - AwsHelper</PageTitle>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-1">
+                        <span class="oi oi-hard-drive me-2 text-warning"></span>
+                        Buckets S3
+                    </h1>
+                    <p class="text-muted mb-0">@filteredBuckets?.Count buckets encontrados</p>
+                    @if (!string.IsNullOrEmpty(selectedProfile))
+                    {
+                        <small class="text-muted">
+                            Perfil selecionado: <span class="badge bg-primary">@selectedProfile</span>
+                        </small>
+                    }
+                </div>
+                <button class="btn btn-primary" @onclick="LoadBuckets" disabled="@(isLoading || string.IsNullOrEmpty(selectedProfile))">
+                    @if (isLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                    }
+                    else
+                    {
+                        <span class="oi oi-reload me-2"></span>
+                    }
+                    Atualizar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title mb-3">
+                        <span class="oi oi-person me-2"></span>
+                        Selecione o Perfil AWS
+                    </h6>
+                    <select class="form-select" @bind="selectedProfile" @bind:after="OnProfileChanged" disabled="@isLoading">
+                        <option value="">-- Selecione um perfil --</option>
+                        @foreach (var profile in availableProfiles)
+                        {
+                            <option value="@profile">@profile</option>
+                        }
+                    </select>
+                    @if (!string.IsNullOrEmpty(selectedProfile) && !isLoading)
+                    {
+                        @if (ProfileService.ProfileExists(selectedProfile))
+                        {
+                            <small class="text-success mt-2 d-block">
+                                <span class="oi oi-check me-1"></span>
+                                Perfil válido
+                            </small>
+                        }
+                        else
+                        {
+                            <small class="text-danger mt-2 d-block">
+                                <span class="oi oi-warning me-1"></span>
+                                Perfil inválido ou não encontrado
+                            </small>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title mb-3">
+                        <span class="oi oi-magnifying-glass me-2"></span>
+                        Filtrar Buckets
+                    </h6>
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <span class="oi oi-magnifying-glass"></span>
+                        </span>
+                        <input type="text" class="form-control" placeholder="Filtrar por nome do bucket..." 
+                               value="@searchTerm" @oninput="OnSearchChanged" />
+                        @if (!string.IsNullOrEmpty(searchTerm))
+                        {
+                            <button class="btn btn-outline-secondary" type="button" @onclick="ClearSearch">
+                                <span class="oi oi-x"></span>
+                            </button>
+                        }
+                    </div>
+                    @if (!string.IsNullOrEmpty(searchTerm))
+                    {
+                        <small class="text-muted mt-2 d-block">
+                            Mostrando @(filteredBuckets?.Count ?? 0) de @(buckets?.Count ?? 0) buckets
+                        </small>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <strong>Erro:</strong> @errorMessage
+            <button type="button" class="btn-close" @onclick="() => errorMessage = string.Empty"></button>
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="d-flex justify-content-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Carregando...</span>
+            </div>
+        </div>
+    }
+    else if (filteredBuckets?.Any() == true && !string.IsNullOrEmpty(selectedProfile))
+    {
+        <div class="row">
+            @foreach (var bucket in filteredBuckets)
+            {
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="card h-100 shadow-sm border-0">
+                        <div class="card-body">
+                            <div class="d-flex align-items-start justify-content-between">
+                                <div class="flex-grow-1">
+                                    <h5 class="card-title text-truncate mb-2">
+                                        <span class="oi oi-hard-drive me-2 text-warning"></span>
+                                        @bucket.Name
+                                    </h5>
+                                    <p class="card-text text-muted small mb-3">
+                                        <strong>Criado em:</strong> @bucket.CreationDate.ToString("dd/MM/yyyy HH:mm")
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="d-grid">
+                                <a href="/s3/objects/@bucket.Name?profile=@selectedProfile" class="btn btn-outline-primary btn-sm">
+                                    <span class="oi oi-folder me-2"></span>
+                                    Ver Arquivos
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else if (!isLoading && string.IsNullOrEmpty(selectedProfile))
+    {
+        <div class="text-center py-5">
+            <div class="mb-3">
+                <span class="oi oi-person display-4 text-muted"></span>
+            </div>
+            <h4 class="text-muted">Selecione um Perfil AWS</h4>
+            <p class="text-muted">Para visualizar os buckets S3, primeiro selecione um perfil AWS válido.</p>
+        </div>
+    }
+    else if (!isLoading && !string.IsNullOrEmpty(selectedProfile))
+    {
+        <div class="text-center py-5">
+            <div class="mb-3">
+                <span class="oi oi-info display-4 text-muted"></span>
+            </div>
+            <h4 class="text-muted">Nenhum bucket encontrado</h4>
+            <p class="text-muted">Não foram encontrados buckets S3 na sua conta AWS.</p>
+            <button class="btn btn-primary" @onclick="LoadBuckets">
+                <span class="oi oi-reload me-2"></span>
+                Tentar Novamente
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    private List<S3Bucket>? buckets;
+    private List<S3Bucket>? filteredBuckets;
+    private List<string> availableProfiles = new();
+    private string selectedProfile = string.Empty;
+    private string searchTerm = string.Empty;
+    private bool isLoading = false;
+    private string errorMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProfiles();
+    }
+
+    private async Task LoadProfiles()
+    {
+        try
+        {
+            availableProfiles = ProfileService.GetAvailableProfiles();
+            selectedProfile = availableProfiles.FirstOrDefault() ?? string.Empty;
+            
+            if (!string.IsNullOrEmpty(selectedProfile))
+            {
+                await LoadBuckets();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao carregar perfis: {ex.Message}";
+        }
+    }
+
+    private async Task OnProfileChanged()
+    {
+        buckets = null;
+        filteredBuckets = new List<S3Bucket>();
+        errorMessage = string.Empty;
+        
+        if (!string.IsNullOrEmpty(selectedProfile))
+        {
+            await LoadBuckets();
+        }
+    }
+
+    private void OnSearchChanged(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? string.Empty;
+        FilterBuckets();
+    }
+
+    private void ClearSearch()
+    {
+        searchTerm = string.Empty;
+        FilterBuckets();
+    }
+
+    private void FilterBuckets()
+    {
+        if (buckets == null)
+        {
+            filteredBuckets = new List<S3Bucket>();
+            return;
+        }
+
+        if (string.IsNullOrEmpty(searchTerm))
+        {
+            filteredBuckets = buckets.ToList();
+        }
+        else
+        {
+            filteredBuckets = buckets.Where(bucket =>
+                bucket.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+            ).ToList();
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task LoadBuckets()
+    {
+        if (string.IsNullOrEmpty(selectedProfile))
+        {
+            errorMessage = "Por favor, selecione um perfil AWS válido.";
+            buckets = null;
+            filteredBuckets = new List<S3Bucket>();
+            return;
+        }
+
+        if (!ProfileService.ProfileExists(selectedProfile))
+        {
+            errorMessage = $"O perfil '{selectedProfile}' não foi encontrado ou é inválido.";
+            buckets = null;
+            filteredBuckets = new List<S3Bucket>();
+            return;
+        }
+
+        try
+        {
+            isLoading = true;
+            errorMessage = string.Empty;
+            buckets = null;
+            filteredBuckets = new List<S3Bucket>();
+            StateHasChanged();
+
+            buckets = await S3Service.ListBucketsAsync(selectedProfile);
+            FilterBuckets();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao carregar buckets: {ex.Message}";
+            buckets = null;
+            filteredBuckets = new List<S3Bucket>();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+}

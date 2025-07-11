@@ -1,0 +1,719 @@
+@page "/s3/objects/{BucketName}"
+@using AwsHelper.Models
+@using AwsHelper.Services
+@inject S3Service S3Service
+@inject AwsProfileService ProfileService
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+
+<PageTitle>@BucketName - Objetos S3 - AwsHelper</PageTitle>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb mb-2">
+                            <li class="breadcrumb-item"><a href="/s3/buckets">Buckets S3</a></li>
+                            <li class="breadcrumb-item">
+                                <a href="/s3/objects/@BucketName?profile=@selectedProfile">@BucketName</a>
+                            </li>
+                            @if (!string.IsNullOrEmpty(currentPath))
+                            {
+                                var pathParts = currentPath.Split('/').Where(p => !string.IsNullOrEmpty(p)).ToArray();
+                                for (int i = 0; i < pathParts.Length; i++)
+                                {
+                                    var pathUpToHere = string.Join("/", pathParts.Take(i + 1));
+                                    if (i == pathParts.Length - 1)
+                                    {
+                                        <li class="breadcrumb-item active" aria-current="page">@pathParts[i]</li>
+                                    }
+                                    else
+                                    {
+                                        <li class="breadcrumb-item">
+                                            <a href="/s3/objects/@BucketName?profile=@selectedProfile&path=@pathUpToHere">@pathParts[i]</a>
+                                        </li>
+                                    }
+                                }
+                            }
+                        </ol>
+                    </nav>
+                    <h1 class="h3 mb-1">
+                        <span class="oi oi-folder me-2 text-primary"></span>
+                        @BucketName
+                        @if (!string.IsNullOrEmpty(currentPath))
+                        {
+                            <span class="text-muted">/@currentPath</span>
+                        }
+                    </h1>
+                    <p class="text-muted mb-0">@browserItems?.Count itens encontrados</p>
+                    @if (!string.IsNullOrEmpty(selectedProfile))
+                    {
+                        <small class="text-muted">
+                            Perfil: <span class="badge bg-primary">@selectedProfile</span>
+                        </small>
+                    }
+                </div>
+                <div class="d-flex gap-2">
+                    @if (!string.IsNullOrEmpty(currentPath))
+                    {
+                        <button class="btn btn-outline-secondary" @onclick="NavigateUp">
+                            <span class="oi oi-arrow-top me-2"></span>
+                            Pasta Anterior
+                        </button>
+                    }
+                    <button class="btn btn-outline-secondary" @onclick="@(() => Navigation.NavigateTo("/s3/buckets"))">
+                        <span class="oi oi-arrow-left me-2"></span>
+                        Voltar aos Buckets
+                    </button>
+                    <button class="btn btn-primary" @onclick="LoadObjects" disabled="@(isLoading || string.IsNullOrEmpty(selectedProfile))">
+                        @if (isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        }
+                        else
+                        {
+                            <span class="oi oi-reload me-2"></span>
+                        }
+                        Atualizar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (string.IsNullOrEmpty(selectedProfile))
+    {
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-title mb-3">
+                            <span class="oi oi-person me-2"></span>
+                            Selecione o Perfil AWS
+                        </h6>
+                        <select class="form-select" @bind="selectedProfile" @bind:after="OnProfileChanged" disabled="@isLoading">
+                            <option value="">-- Selecione um perfil --</option>
+                            @foreach (var profile in availableProfiles)
+                            {
+                                <option value="@profile">@profile</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <span class="input-group-text">
+                        <span class="oi oi-magnifying-glass"></span>
+                    </span>
+                    <input type="text" class="form-control" placeholder="Filtrar por nome..." 
+                           value="@searchTerm" @oninput="OnSearchChanged" />
+                    @if (!string.IsNullOrEmpty(searchTerm))
+                    {
+                        <button class="btn btn-outline-secondary" type="button" @onclick="ClearSearch">
+                            <span class="oi oi-x"></span>
+                        </button>
+                    }
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="input-group">
+                    <span class="input-group-text">
+                        <span class="oi oi-folder"></span>
+                    </span>
+                    <input type="text" class="form-control" placeholder="Navegar para pasta..." 
+                           @bind="navigationPath" @onkeydown="OnNavigationKeyPress" @onkeydown:preventDefault="false" />
+                    <button class="btn btn-outline-primary" type="button" @onclick="NavigateToPath">
+                        Ir
+                    </button>
+                </div>
+                <small class="text-muted mt-1 d-block">
+                    Caminho atual: @(string.IsNullOrEmpty(currentPath) ? "/" : "/" + currentPath)
+                </small>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <strong>Erro:</strong> @errorMessage
+            <button type="button" class="btn-close" @onclick="@(() => errorMessage = string.Empty)"></button>
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="d-flex justify-content-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Carregando...</span>
+            </div>
+        </div>
+    }
+    else if (string.IsNullOrEmpty(selectedProfile))
+    {
+        <div class="text-center py-5">
+            <div class="mb-3">
+                <span class="oi oi-person display-4 text-muted"></span>
+            </div>
+            <h4 class="text-muted">Selecione um Perfil AWS</h4>
+            <p class="text-muted">Para visualizar os objetos, primeiro selecione um perfil AWS válido.</p>
+        </div>
+    }
+    else if (filteredBrowserItems?.Any() == true)
+    {
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="cursor: pointer;" @onclick="() => ToggleSort(SortField.Name)">
+                                <span class="oi oi-document me-2"></span>
+                                Nome
+                                @if (currentSortField == SortField.Name)
+                                {
+                                    <span class="oi @(isAscending ? "oi-caret-top" : "oi-caret-bottom") ms-1"></span>
+                                }
+                            </th>
+                            <th style="cursor: pointer;" @onclick="() => ToggleSort(SortField.LastModified)">
+                                <span class="oi oi-clock me-2"></span>
+                                Última Modificação
+                                @if (currentSortField == SortField.LastModified)
+                                {
+                                    <span class="oi @(isAscending ? "oi-caret-top" : "oi-caret-bottom") ms-1"></span>
+                                }
+                            </th>
+                            <th style="cursor: pointer;" @onclick="() => ToggleSort(SortField.Size)">
+                                <span class="oi oi-data-transfer-download me-2"></span>
+                                Tamanho
+                                @if (currentSortField == SortField.Size)
+                                {
+                                    <span class="oi @(isAscending ? "oi-caret-top" : "oi-caret-bottom") ms-1"></span>
+                                }
+                            </th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in filteredBrowserItems)
+                        {
+                            <tr>
+                                <td class="align-middle">
+                                    <div class="d-flex align-items-center">
+                                        @if (item.IsFolder)
+                                        {
+                                            <span class="oi oi-folder me-2 text-warning"></span>
+                                            <button class="btn btn-link p-0 fw-medium text-decoration-none" 
+                                                    @onclick="@(() => NavigateToFolder(item.FullPath))">
+                                                @item.Name/
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <span class="oi oi-document me-2 text-muted"></span>
+                                            <span class="fw-medium">@item.Name</span>
+                                        }
+                                    </div>
+                                </td>
+                                <td class="align-middle">
+                                    @if (item.IsFolder)
+                                    {
+                                        <small class="text-muted">Pasta</small>
+                                    }
+                                    else
+                                    {
+                                        <small>@item.File!.LastModified.ToString("dd/MM/yyyy HH:mm:ss")</small>
+                                    }
+                                </td>
+                                <td class="align-middle">
+                                    @if (item.IsFolder)
+                                    {
+                                        <span class="badge bg-light text-dark">@item.Folder!.FileCount arquivo(s)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-light text-dark">@item.File!.SizeFormatted</span>
+                                    }
+                                </td>
+                                <td class="align-middle">
+                                    @if (item.IsFolder)
+                                    {
+                                        <button type="button" class="btn btn-outline-primary btn-sm" 
+                                                @onclick="@(() => NavigateToFolder(item.FullPath))">
+                                            <span class="oi oi-folder me-1"></span>
+                                            Abrir
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-outline-primary btn-sm" 
+                                                @onclick="@(() => DownloadObject(item.File!))" 
+                                                disabled="@(downloadingObjects.Contains(item.File!.Key))">
+                                            @if (downloadingObjects.Contains(item.File!.Key))
+                                            {
+                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                            }
+                                            else
+                                            {
+                                                <span class="oi oi-data-transfer-download me-1"></span>
+                                            }
+                                            Download
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+    else if (!isLoading && !string.IsNullOrEmpty(selectedProfile))
+    {
+        <div class="text-center py-5">
+            <div class="mb-3">
+                <span class="oi oi-info display-4 text-muted"></span>
+            </div>
+            <h4 class="text-muted">Nenhum objeto encontrado</h4>
+            <p class="text-muted">
+                @if (!string.IsNullOrEmpty(searchTerm))
+                {
+                    <span>Não foram encontrados itens com os filtros aplicados.</span>
+                }
+                else
+                {
+                    <span>Esta pasta não contém itens ou você não tem permissão para visualizá-los.</span>
+                }
+            </p>
+            @if (!string.IsNullOrEmpty(searchTerm))
+            {
+                <button class="btn btn-primary" @onclick="ClearFilters">
+                    <span class="oi oi-reload me-2"></span>
+                    Limpar Filtros
+                </button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    public enum SortField
+    {
+        Name,
+        LastModified,
+        Size
+    }
+
+    [Parameter] public string BucketName { get; set; } = string.Empty;
+    [SupplyParameterFromQuery] public string? Profile { get; set; }
+    [SupplyParameterFromQuery] public string? Path { get; set; }
+
+    private List<S3Object>? objects;
+    private List<S3BrowserItem>? browserItems;
+    private List<S3BrowserItem>? filteredBrowserItems;
+    private List<string> availableProfiles = new();
+    private string selectedProfile = string.Empty;
+    private string currentPath = string.Empty;
+    private string navigationPath = string.Empty;
+    private bool isLoading = false;
+    private string errorMessage = string.Empty;
+    private string searchTerm = string.Empty;
+    private HashSet<string> downloadingObjects = new();
+    
+    // Variáveis para ordenação
+    private SortField currentSortField = SortField.Name;
+    private bool isAscending = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProfiles();
+        
+        // Se o perfil foi passado como parâmetro da URL, use-o
+        if (!string.IsNullOrEmpty(Profile))
+        {
+            selectedProfile = Profile;
+        }
+        
+        // Se o caminho foi passado como parâmetro da URL, use-o
+        if (!string.IsNullOrEmpty(Path))
+        {
+            currentPath = Path;
+            navigationPath = Path;
+        }
+        
+        if (!string.IsNullOrEmpty(selectedProfile))
+        {
+            await LoadObjects();
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.IsNullOrEmpty(BucketName) && !string.IsNullOrEmpty(selectedProfile))
+        {
+            await LoadObjects();
+        }
+    }
+
+    private async Task LoadProfiles()
+    {
+        try
+        {
+            availableProfiles = ProfileService.GetAvailableProfiles();
+            
+            if (string.IsNullOrEmpty(selectedProfile) && availableProfiles.Any())
+            {
+                selectedProfile = availableProfiles.First();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao carregar perfis: {ex.Message}";
+        }
+    }
+
+    private async Task OnProfileChanged()
+    {
+        // Limpar objetos sempre que o perfil mudar
+        objects = null;
+        browserItems = null;
+        filteredBrowserItems = null;
+        errorMessage = string.Empty;
+        
+        if (!string.IsNullOrEmpty(selectedProfile))
+        {
+            await LoadObjects();
+        }
+    }
+
+    private async Task LoadObjects()
+    {
+        if (string.IsNullOrEmpty(selectedProfile))
+        {
+            errorMessage = "Por favor, selecione um perfil AWS válido.";
+            objects = null;
+            browserItems = null;
+            filteredBrowserItems = null;
+            return;
+        }
+
+        // Verificar se o perfil existe antes de tentar usar
+        if (!ProfileService.ProfileExists(selectedProfile))
+        {
+            errorMessage = $"O perfil '{selectedProfile}' não foi encontrado ou é inválido.";
+            objects = null;
+            browserItems = null;
+            filteredBrowserItems = null;
+            return;
+        }
+
+        try
+        {
+            isLoading = true;
+            errorMessage = string.Empty;
+            objects = null; // Limpar objetos antes de carregar novos
+            browserItems = null;
+            filteredBrowserItems = null;
+            StateHasChanged();
+
+            // Carregar objetos com prefixo baseado no caminho atual
+            var prefix = string.IsNullOrEmpty(currentPath) ? "" : currentPath + "/";
+            objects = await S3Service.ListObjectsAsync(selectedProfile, BucketName, prefix, 10000);
+            
+            BuildBrowserItems();
+            FilterBrowserItems();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao carregar objetos: {ex.Message}";
+            objects = null; // Garantir que objetos sejam limpos em caso de erro
+            browserItems = null;
+            filteredBrowserItems = null;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OnSearchChanged(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? string.Empty;
+        FilterBrowserItems();
+    }
+
+    private async Task OnNavigationKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" || e.Code == "Enter" || e.Code == "NumpadEnter")
+        {
+            // Aguardar um pouco para garantir que o @bind seja processado
+            await Task.Delay(50);
+            await NavigateToPath();
+        }
+    }
+
+    private void BuildBrowserItems()
+    {
+        if (objects == null)
+        {
+            browserItems = null;
+            return;
+        }
+
+        var items = new List<S3BrowserItem>();
+        var folders = new Dictionary<string, S3Folder>();
+        var currentPrefix = string.IsNullOrEmpty(currentPath) ? "" : currentPath + "/";
+
+        foreach (var obj in objects)
+        {
+            // Remover o prefixo atual do key para obter o caminho relativo
+            var relativePath = obj.Key.StartsWith(currentPrefix) ? obj.Key.Substring(currentPrefix.Length) : obj.Key;
+            
+            // Se está vazio, pular (é um objeto na raiz com o mesmo nome da pasta)
+            if (string.IsNullOrEmpty(relativePath))
+                continue;
+
+            // Verificar se tem mais barras (é um subdiretório)
+            var slashIndex = relativePath.IndexOf('/');
+            
+            if (slashIndex > 0)
+            {
+                // É uma pasta
+                var folderName = relativePath.Substring(0, slashIndex);
+                var folderPath = string.IsNullOrEmpty(currentPath) ? folderName : currentPath + "/" + folderName;
+                
+                if (!folders.ContainsKey(folderName))
+                {
+                    folders[folderName] = new S3Folder
+                    {
+                        Name = folderName,
+                        FullPath = folderPath,
+                        FileCount = 0,
+                        TotalSize = 0
+                    };
+                }
+                
+                folders[folderName].FileCount++;
+                folders[folderName].TotalSize += obj.Size;
+            }
+            else
+            {
+                // É um arquivo
+                items.Add(new S3BrowserItem
+                {
+                    Name = relativePath,
+                    FullPath = obj.Key,
+                    IsFolder = false,
+                    File = obj
+                });
+            }
+        }
+
+        // Adicionar pastas
+        foreach (var folder in folders.Values)
+        {
+            items.Add(new S3BrowserItem
+            {
+                Name = folder.Name,
+                FullPath = folder.FullPath,
+                IsFolder = true,
+                Folder = folder
+            });
+        }
+
+        // Ordenar: pastas primeiro, depois arquivos
+        browserItems = items.OrderBy(i => !i.IsFolder).ThenBy(i => i.Name).ToList();
+    }
+
+    private void FilterBrowserItems()
+    {
+        if (browserItems == null)
+        {
+            filteredBrowserItems = null;
+            return;
+        }
+
+        var filtered = browserItems.Where(item =>
+            string.IsNullOrEmpty(searchTerm) ||
+            item.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+        );
+
+        // Aplicar ordenação
+        filtered = ApplySorting(filtered);
+
+        filteredBrowserItems = filtered.ToList();
+        StateHasChanged();
+    }
+
+    private IEnumerable<S3BrowserItem> ApplySorting(IEnumerable<S3BrowserItem> items)
+    {
+        var folders = items.Where(i => i.IsFolder);
+        var files = items.Where(i => !i.IsFolder);
+
+        // Para ordenação por última modificação, priorizar arquivos sobre pastas
+        if (currentSortField == SortField.LastModified)
+        {
+            // Ordenar arquivos por data de modificação
+            files = isAscending ? files.OrderBy(f => f.File!.LastModified) : files.OrderByDescending(f => f.File!.LastModified);
+            
+            // Ordenar pastas por nome (já que não têm data)
+            folders = isAscending ? folders.OrderBy(f => f.Name) : folders.OrderByDescending(f => f.Name);
+            
+            // Retornar arquivos primeiro, depois pastas
+            return files.Concat(folders);
+        }
+        else
+        {
+            // Para outras ordenações, manter pastas primeiro
+            // Ordenar pastas
+            folders = currentSortField switch
+            {
+                SortField.Name => isAscending ? folders.OrderBy(f => f.Name) : folders.OrderByDescending(f => f.Name),
+                SortField.Size => isAscending ? folders.OrderBy(f => f.Folder!.FileCount) : folders.OrderByDescending(f => f.Folder!.FileCount),
+                _ => folders.OrderBy(f => f.Name)
+            };
+
+            // Ordenar arquivos
+            files = currentSortField switch
+            {
+                SortField.Name => isAscending ? files.OrderBy(f => f.Name) : files.OrderByDescending(f => f.Name),
+                SortField.Size => isAscending ? files.OrderBy(f => f.File!.Size) : files.OrderByDescending(f => f.File!.Size),
+                _ => files.OrderBy(f => f.Name)
+            };
+
+            // Retornar pastas primeiro, depois arquivos
+            return folders.Concat(files);
+        }
+    }
+
+    private void ToggleSort(SortField field)
+    {
+        if (currentSortField == field)
+        {
+            isAscending = !isAscending;
+        }
+        else
+        {
+            currentSortField = field;
+            isAscending = true;
+        }
+
+        FilterBrowserItems();
+    }
+
+    private void ClearSearch()
+    {
+        searchTerm = string.Empty;
+        FilterBrowserItems();
+    }
+
+    private async Task ClearFilters()
+    {
+        searchTerm = string.Empty;
+        await LoadObjects();
+    }
+
+    private async Task NavigateToFolder(string folderPath)
+    {
+        currentPath = folderPath;
+        navigationPath = folderPath;
+        Navigation.NavigateTo($"/s3/objects/{BucketName}?profile={selectedProfile}&path={folderPath}");
+        await LoadObjects();
+    }
+
+    private async Task NavigateToPath()
+    {
+        // Limpar espaços em branco e normalizar o caminho
+        navigationPath = navigationPath?.Trim() ?? string.Empty;
+        
+        // Se o caminho começa com "/", remover
+        if (navigationPath.StartsWith("/"))
+        {
+            navigationPath = navigationPath.Substring(1);
+        }
+        
+        // Se o caminho termina com "/", remover
+        if (navigationPath.EndsWith("/") && navigationPath.Length > 0)
+        {
+            navigationPath = navigationPath.Substring(0, navigationPath.Length - 1);
+        }
+        
+        currentPath = navigationPath;
+        
+        // Construir URL adequada
+        var url = string.IsNullOrEmpty(currentPath) ? 
+            $"/s3/objects/{BucketName}?profile={selectedProfile}" : 
+            $"/s3/objects/{BucketName}?profile={selectedProfile}&path={currentPath}";
+            
+        Navigation.NavigateTo(url);
+        await LoadObjects();
+    }
+
+    private async Task NavigateUp()
+    {
+        if (string.IsNullOrEmpty(currentPath))
+            return;
+
+        var lastSlash = currentPath.LastIndexOf('/');
+        if (lastSlash > 0)
+        {
+            currentPath = currentPath.Substring(0, lastSlash);
+            navigationPath = currentPath;
+        }
+        else
+        {
+            currentPath = string.Empty;
+            navigationPath = string.Empty;
+        }
+
+        var url = string.IsNullOrEmpty(currentPath) ? 
+            $"/s3/objects/{BucketName}?profile={selectedProfile}" : 
+            $"/s3/objects/{BucketName}?profile={selectedProfile}&path={currentPath}";
+        
+        Navigation.NavigateTo(url);
+        await LoadObjects();
+    }
+
+    private async Task DownloadObject(S3Object obj)
+    {
+        if (string.IsNullOrEmpty(selectedProfile))
+        {
+            errorMessage = "Perfil AWS não selecionado.";
+            return;
+        }
+
+        try
+        {
+            downloadingObjects.Add(obj.Key);
+            StateHasChanged();
+
+            using var stream = await S3Service.DownloadObjectAsync(selectedProfile, BucketName, obj.Key);
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+            
+            var base64 = Convert.ToBase64String(memoryStream.ToArray());
+            var fileName = obj.FileName;
+            
+            await JSRuntime.InvokeVoidAsync("downloadFile", base64, fileName);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Erro ao baixar arquivo {obj.FileName}: {ex.Message}";
+        }
+        finally
+        {
+            downloadingObjects.Remove(obj.Key);
+            StateHasChanged();
+        }
+    }
+
+
+}

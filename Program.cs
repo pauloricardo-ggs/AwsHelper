@@ -1,10 +1,10 @@
 using AwsHelper.Services;
 using Amazon.SimpleSystemsManagement;
+using Amazon.S3;
 using System.Globalization;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configuração de localização para português brasileiro
 builder.Services.Configure<RequestLocalizationOptions>(options =>
 {
     var supportedCultures = new[] { new CultureInfo("pt-BR") };
@@ -15,11 +15,13 @@ builder.Services.Configure<RequestLocalizationOptions>(options =>
 
 builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
 builder.Services.AddAWSService<IAmazonSimpleSystemsManagement>();
+builder.Services.AddAWSService<IAmazonS3>();
 
-// Registrar o serviço JSON em vez do Entity Framework
 builder.Services.AddSingleton<JsonDataService>();
 
 builder.Services.AddScoped<ParameterStoreService>();
+builder.Services.AddScoped<AwsProfileService>();
+builder.Services.AddScoped<S3Service>();
 
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
