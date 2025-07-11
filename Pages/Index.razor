@@ -1,0 +1,158 @@
+@page "/"
+@page "/home"
+
+<PageTitle>AwsHelper - Home</PageTitle>
+
+<div class="container-fluid">
+    <!-- Hero Section -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="hero-section text-center py-5 mb-4 hero-gradient text-white rounded-3">
+                <div class="container">
+                    <img src="/images/awshelper_side_transparent.png" alt="AwsHelper" class="logo-large mb-3" />
+                    <p class="lead mb-4">
+                        Sua ferramenta completa para gerenciamento do AWS Parameter Store
+                    </p>
+                    <div class="d-flex justify-content-center gap-3 flex-wrap">
+                        <a href="/parameter-store/variables" class="btn btn-light btn-lg">
+                            <span class="oi oi-list-rich me-2"></span>
+                            Gerenciar Variáveis
+                        </a>
+                        <a href="/parameter-store/paths" class="btn btn-secondary btn-lg">
+                            <span class="oi oi-folder me-2"></span>
+                            Explorar Caminhos
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Features Cards -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <h2 class="text-center mb-4">Funcionalidades Principais</h2>
+        </div>
+        
+        <!-- Variables Card -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100 shadow-sm card-primary">
+                <div class="card-body text-center">
+                    <div class="feature-icon feature-icon-primary mb-3">
+                        <span class="oi oi-list-rich display-4"></span>
+                    </div>
+                    <h4 class="card-title">Gerenciamento de Variáveis</h4>
+                    <p class="card-text">
+                        Visualize, adicione e gerencie suas variáveis do Parameter Store de forma intuitiva. 
+                        Busque por chaves, filtre por caminhos e adicione múltiplas variáveis de uma só vez.
+                    </p>
+                    <ul class="list-unstyled text-start">
+                        <li><span class="oi oi-check text-success me-2"></span>Listagem paginada</li>
+                        <li><span class="oi oi-check text-success me-2"></span>Busca em tempo real</li>
+                        <li><span class="oi oi-check text-success me-2"></span>Adição em lote</li>
+                        <li><span class="oi oi-check text-success me-2"></span>Detalhes completos</li>
+                    </ul>
+                    <a href="/parameter-store/variables" class="btn btn-primary">
+                        <span class="oi oi-list-rich me-2"></span>
+                        Acessar Variáveis
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Paths Card -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100 shadow-sm card-secondary">
+                <div class="card-body text-center">
+                    <div class="feature-icon feature-icon-secondary mb-3">
+                        <span class="oi oi-folder display-4"></span>
+                    </div>
+                    <h4 class="card-title">Exploração de Caminhos</h4>
+                    <p class="card-text">
+                        Navegue pela estrutura hierárquica dos seus parâmetros. 
+                        Organize e explore diferentes ambientes e configurações de forma estruturada.
+                    </p>
+                    <ul class="list-unstyled text-start">
+                        <li><span class="oi oi-check text-success me-2"></span>Estrutura hierárquica</li>
+                        <li><span class="oi oi-check text-success me-2"></span>Múltiplos perfis AWS</li>
+                        <li><span class="oi oi-check text-success me-2"></span>Navegação intuitiva</li>
+                        <li><span class="oi oi-check text-success me-2"></span>Organização clara</li>
+                    </ul>
+                    <a href="/parameter-store/paths" class="btn btn-secondary">
+                        <span class="oi oi-folder me-2"></span>
+                        Explorar Caminhos
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AWS Integration -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="card bg-light">
+                <div class="card-body text-center py-5">
+                    <span class="oi oi-cloud display-3 text-secondary mb-3 d-block"></span>
+                    <h3 class="mb-3">Integração Completa com AWS</h3>
+                    <p class="lead mb-4">
+                        Conecte-se diretamente ao AWS Parameter Store usando seus perfis AWS configurados. 
+                        Gerencie parâmetros de diferentes ambientes de forma segura e eficiente.
+                    </p>
+                    <div class="row justify-content-center">
+                        <div class="col-md-8">
+                            <div class="row text-start">
+                                <div class="col-md-6">
+                                    <ul class="list-unstyled">
+                                        <li class="mb-2">
+                                            <span class="oi oi-shield text-success me-2"></span>
+                                            <strong>Seguro:</strong> Usa suas credenciais AWS
+                                        </li>
+                                        <li class="mb-2">
+                                            <span class="oi oi-target text-primary me-2"></span>
+                                            <strong>Preciso:</strong> Acesso direto ao Parameter Store
+                                        </li>
+                                    </ul>
+                                </div>
+                                <div class="col-md-6">
+                                    <ul class="list-unstyled">
+                                        <li class="mb-2">
+                                            <span class="oi oi-flash text-secondary me-2"></span>
+                                            <strong>Rápido:</strong> Interface otimizada
+                                        </li>
+                                        <li class="mb-2">
+                                            <span class="oi oi-people text-info me-2"></span>
+                                            <strong>Múltiplos perfis:</strong> Suporte a diferentes contas
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row">
+        <div class="col-12">
+            <div class="text-center">
+                <h4 class="mb-4">Ações Rápidas</h4>
+                <div class="d-flex justify-content-center gap-3 flex-wrap">
+                    <a href="/parameter-store/variables" class="btn btn-primary">
+                        <span class="oi oi-plus me-2"></span>
+                        Adicionar Variáveis
+                    </a>
+                    <a href="/parameter-store/variables" class="btn btn-outline-primary">
+                        <span class="oi oi-magnifying-glass me-2"></span>
+                        Buscar Parâmetros
+                    </a>
+                    <a href="/parameter-store/paths" class="btn btn-secondary">
+                        <span class="oi oi-eye me-2"></span>
+                        Visualizar Estrutura
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

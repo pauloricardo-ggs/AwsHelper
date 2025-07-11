@@ -1,0 +1,258 @@
+/* AwsHelper Color Scheme - Based on Original Logo */
+:root {
+    --aws-primary: rgb(21, 55, 70);      /* Dark teal from background - more accurate */
+    --aws-primary-dark: #1F4747;  /* Darker variant */
+    --aws-primary-light: #3D7373; /* Lighter variant */
+    --aws-secondary: #FF7A00;     /* Vibrant orange from cloud - more accurate */
+    --aws-secondary-dark: #E66A00; /* Darker orange */
+    --aws-secondary-light: #FF9433; /* Lighter orange */
+    --aws-accent: #FFB366;        /* Light orange accent */
+    --aws-success: #28A745;       /* Keep Bootstrap success */
+    --aws-warning: #FF7A00;       /* Use our orange for warnings */
+    --aws-danger: #DC3545;        /* Keep Bootstrap danger */
+    --aws-info: #3D7373;          /* Use our light blue for info */
+    --aws-light: #F8F9FA;         /* Keep Bootstrap light */
+    --aws-dark: #1F4747;          /* Use our dark blue */
+}
+
+/* Override Bootstrap primary colors */
+.btn-primary {
+    background-color: var(--aws-primary);
+    border-color: var(--aws-primary);
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+    background-color: var(--aws-primary-dark);
+    border-color: var(--aws-primary-dark);
+}
+
+.btn-secondary {
+    background-color: var(--aws-secondary);
+    border-color: var(--aws-secondary);
+    color: white;
+}
+
+.btn-secondary:hover,
+.btn-secondary:focus {
+    background-color: var(--aws-secondary-dark);
+    border-color: var(--aws-secondary-dark);
+    color: white;
+}
+
+.btn-outline-primary {
+    color: var(--aws-primary);
+    border-color: var(--aws-primary);
+}
+
+.btn-outline-primary:hover,
+.btn-outline-primary:focus {
+    background-color: var(--aws-primary);
+    border-color: var(--aws-primary);
+}
+
+.btn-outline-secondary {
+    color: var(--aws-secondary);
+    border-color: var(--aws-secondary);
+}
+
+.btn-outline-secondary:hover,
+.btn-outline-secondary:focus {
+    background-color: var(--aws-secondary);
+    border-color: var(--aws-secondary);
+    color: white;
+}
+
+.bg-primary {
+    background-color: var(--aws-primary) !important;
+}
+
+.text-primary {
+    color: var(--aws-primary) !important;
+}
+
+.text-secondary {
+    color: var(--aws-secondary) !important;
+}
+
+.text-warning {
+    color: var(--aws-secondary) !important;
+}
+
+.text-info {
+    color: var(--aws-info) !important;
+}
+
+/* Navigation styles */
+.navbar-dark {
+    background-color: var(--aws-primary) !important;
+}
+
+.navbar-dark .navbar-brand {
+    color: white !important;
+    font-weight: bold;
+}
+
+.navbar-dark .navbar-brand:hover {
+    color: var(--aws-accent) !important;
+}
+
+/* Sidebar navigation */
+.nav-scrollable {
+    background-color: var(--aws-primary);
+}
+
+.nav-scrollable .nav-link {
+    color: rgba(255, 255, 255, 0.85);
+    border-radius: 0.375rem;
+    margin-bottom: 0.25rem;
+    transition: all 0.15s ease-in-out;
+}
+
+.nav-scrollable .nav-link:hover {
+    color: white;
+    background-color: rgba(255, 122, 0, 0.2);
+}
+
+.nav-scrollable .nav-link.active {
+    color: white;
+    background-color: var(--aws-secondary);
+}
+
+.nav-section-header {
+    color: var(--aws-accent) !important;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+}
+
+/* Hero section styles */
+.hero-section {
+    background: linear-gradient(135deg, var(--aws-primary) 0%, var(--aws-primary-dark) 50%, var(--aws-secondary) 100%);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Card styles */
+.card {
+    border: none;
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+.card-primary {
+    border-left: 4px solid var(--aws-primary);
+}
+
+.card-secondary {
+    border-left: 4px solid var(--aws-secondary);
+}
+
+/* Feature icons */
+.feature-icon {
+    padding: 1rem;
+    border-radius: 50%;
+    display: inline-block;
+    margin-bottom: 1rem;
+}
+
+.feature-icon-primary {
+    background-color: rgba(44, 95, 95, 0.1);
+    color: var(--aws-primary);
+}
+
+.feature-icon-secondary {
+    background-color: rgba(255, 122, 0, 0.1);
+    color: var(--aws-secondary);
+}
+
+/* Logo styles */
+.logo {
+    height: 80px;
+    width: auto;
+}
+
+.logo-large {
+    height: 160px;
+    width: auto;
+}
+
+/* Loading spinner */
+.spinner-border-aws {
+    color: var(--aws-secondary);
+}
+
+/* Tables */
+.table-striped > tbody > tr:nth-of-type(odd) > td {
+    background-color: rgba(44, 95, 95, 0.05);
+}
+
+/* Badges */
+.badge-aws {
+    background-color: var(--aws-secondary);
+    color: white;
+}
+
+/* Progress bars */
+.progress-bar-aws {
+    background-color: var(--aws-secondary);
+}
+
+/* Forms */
+.form-control:focus {
+    border-color: var(--aws-secondary);
+    box-shadow: 0 0 0 0.2rem rgba(255, 122, 0, 0.25);
+}
+
+.form-select:focus {
+    border-color: var(--aws-secondary);
+    box-shadow: 0 0 0 0.2rem rgba(255, 122, 0, 0.25);
+}
+
+/* Modal */
+.modal-header {
+    background-color: var(--aws-primary);
+    color: white;
+}
+
+.modal-header .btn-close {
+    filter: invert(1);
+}
+
+/* Alerts */
+.alert-aws {
+    background-color: rgba(255, 122, 0, 0.1);
+    border-color: var(--aws-secondary);
+    color: var(--aws-primary);
+}
+
+/* Top row styling */
+.top-row {
+    background-color: rgba(44, 95, 95, 0.05);
+    border-bottom: 1px solid rgba(44, 95, 95, 0.1);
+}
+
+.top-row a {
+    color: var(--aws-primary);
+    font-weight: 500;
+}
+
+.top-row a:hover {
+    color: var(--aws-secondary);
+}
+
+/* Content area */
+.content {
+    background-color: #fafafa;
+    min-height: calc(100vh - 160px);
+}
+
+/* Sidebar improvements */
+.sidebar {
+    background-color: var(--aws-primary);
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1);
+}
